@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Release</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <OutputType>Library</OutputType>
+    <RootNamespace>FakerSwap</RootNamespace>
+    <AssemblyName>FakerSwap</AssemblyName>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>9</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <Deterministic>true</Deterministic>
+    <DebugType>none</DebugType>
+    <OutputPath>..\Output\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <NoWarn>CS0168;CS0219;CS0414;CS0649;CS8632;CS8321;CS0618</NoWarn>
+    <AssemblySearchPaths>$(ProjectDir)Libs;$(AssemblySearchPaths)</AssemblySearchPaths>
+  </PropertyGroup>
+
+  <!-- Reference every game/loader assembly dropped into Libs. -->
+  <ItemGroup>
+    <_FakerSwapLib Include="Libs\*.dll" />
+    <Reference Include="@(_FakerSwapLib->'%(Filename)')">
+      <HintPath>%(FullPath)</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="Libs\**" />
+    <None Remove="Libs\**" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,38 @@
+# ---- build outputs ----
+Output/
+FakerSwap/obj/
+FakerSwap/bin/
+*.pdb
+*.user
+
+# ---- local runtime files ----
+screens/
+FakerSwap/*.log
+FakerSwap/config.json
+game-dir.txt
+
+# ---- game / Unity reference assemblies (not redistributable) ----
+# 本仓库不发布 Assembly-CSharp.dll / UnityEngine 等游戏本体 DLL。
+# 本地编译前运行: pwsh tools/fetch-libs.ps1（需要 MAI_GAME_DIR）
+FakerSwap/Libs/*.dll
+FakerSwap/Libs/*.xml
+
+# ---- reference projects (each is its own git repo) ----
+AquaMai/
+Sinmai-Assist/
+
+# ---- IDE / OS ----
+.vs/
+.idea/
+.vscode/
+Thumbs.db
+Desktop.ini
+
+# ---- local scratch (IL dumps / isolated UI builds) ----
+.tmp-decomp/
+.tmp-patch/
+.tmp-build-ui/
+FakerSwap/docs/
+
+# local log snapshots
+.tmp-logs/
