@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using FakerSwap.Core;
 
 namespace FakerSwap.Data
@@ -78,6 +79,7 @@ namespace FakerSwap.Data
 
             var existing = BuildExistingMap(existingTarget);
             res.ExistingTotal = existing.Count;
+            var autoSkip = LoadAutoSkip();
 
             // 1) window + existence check, 2) keep the highest existing difficulty per song.
             var bySong = new Dictionary<int, ScoreRecord>();
@@ -86,7 +88,15 @@ namespace FakerSwap.Data
                 if (r == null) continue;
                 if (r.Level < minLevel || r.Level > maxLevel) { res.OutOfRange.Add(r); continue; }
                 if (!ChartCatalog.Exists(r.MusicId, r.Level)) { res.Missing.Add(r); continue; }
-                if (IsMusicSkipped(r.MusicId)) { res.Locked.Add(r); continue; }
+                if (autoSkip.Contains(r.MusicId) || IsMusicSkipped(r.MusicId)) { res.Locked.Add(r); continue; }
+                // Re:MASTER（难度4）没解禁的谱面，游戏在难度页根本不接受「決定」，
+                // 会卡到 25s 选曲超时把整轮任务判死。只放行「已有 Re:MASTER 成绩」或
+                // 「服务端 kind7 解禁表里有它」的曲目。
+                if (r.Level >= 4 && !IsReMasterPlayable(r.MusicId))
+                {
+                    res.Locked.Add(r);
+                    continue;
+                }
                 // 难度/曲目对当前账号是锁的（活动曲等）：选歌页会卡在难度页直到 25s 超时，
                 // 必须在计划阶段就剔除（下次跑区/转生才会跳过这些曲）。
                 if (!ChartCatalog.IsDifficultyUnlocked(r.MusicId, r.Level) ||
@@ -144,6 +154,43 @@ namespace FakerSwap.Data
             }
             catch (Exception) { }
             return false;
+        }
+
+        /// <summary>
+        /// Re:MASTER 是否可玩：服务端 kind7 解禁表里必须有它，或账号已经有这首的 Re:MASTER 成绩。
+        /// （实机验证：没有这两者之一时，选歌页的难度页拒accept「決定」，任务会超时崩。）
+        /// </summary>
+        private static bool IsReMasterPlayable(int musicId)
+        {
+            try
+            {
+                var ud = UserDataPatcher.GetLive(0);
+                if (ud == null) return false;   // 计划在登录后才构建；拿不到账号数据时保守跳过
+                var unlockList = ud.MusicUnlockReMasterList;
+                if (unlockList != null && unlockList.Contains(musicId)) return true;
+                var scores = ud.ScoreDic;
+                if (scores != null && scores.Length > 4 && scores[4] != null && scores[4].ContainsKey(musicId)) return true;
+            }
+            catch (Exception) { }
+            return false;
+        }
+
+        /// <summary>FakerSwap/auto-skip.txt: 选曲超时后自动追加的 musicId（重启后自动跳过）。</summary>
+        private static HashSet<int> LoadAutoSkip()
+        {
+            var set = new HashSet<int>();
+            try
+            {
+                string path = Path.Combine(Fs.Root, "auto-skip.txt");
+                if (!File.Exists(path)) return set;
+                foreach (string line in File.ReadAllLines(path))
+                {
+                    int id;
+                    if (int.TryParse(line.Trim(), out id) && id > 0) set.Add(id);
+                }
+            }
+            catch (Exception) { }
+            return set;
         }
 
         /// <summary>

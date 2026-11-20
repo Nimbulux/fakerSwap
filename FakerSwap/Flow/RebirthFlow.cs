@@ -2794,6 +2794,21 @@ namespace FakerSwap.Flow
                          " diffUnlocked=" + ChartCatalog.IsDifficultyUnlocked(slot.Item.MusicId, slot.Item.Level) +
                          " chartUnlocked=" + ChartCatalog.IsChartUnlocked(slot.Item.MusicId, slot.Item.Level) +
                          " stage=" + GameStagePump.Stage);
+                try
+                {
+                    // 下次启动自动跳过这颗雷（PlanBuilder 会读 auto-skip.txt）。
+                    string skipPath = System.IO.Path.Combine(Fs.Root, "auto-skip.txt");
+                    var lines = new System.Collections.Generic.List<string>();
+                    if (System.IO.File.Exists(skipPath)) lines.AddRange(System.IO.File.ReadAllLines(skipPath));
+                    string id = slot.Item.MusicId.ToString();
+                    if (!lines.Contains(id))
+                    {
+                        lines.Add(id);
+                        System.IO.File.WriteAllLines(skipPath, lines.ToArray());
+                        Log.Warn("[flow] 已把选不出来的 musicId=" + id + " 写入 auto-skip.txt（下次自动跳过）");
+                    }
+                }
+                catch (Exception) { }
                 Fail("选曲超时 " + slot.Item.MusicId + "-" + slot.Item.Level);
             }
         }
