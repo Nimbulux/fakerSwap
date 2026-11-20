@@ -86,6 +86,44 @@ namespace FakerSwap.Core
                     Log.Error("CrashFixes: ContinueDiag 安装失败", e);
                 }
 
+                // 诊断：把游戏运行时 NotesListManager / NotesWrapper 的解锁 API 打到日志，
+                // 供 ChartCatalog 的反射过滤对照（Libs 与运行 build 的方法签名不一致）。
+                try
+                {
+                    var nlmType = AccessTools.TypeByName("Manager.NotesListManager");
+                    if (nlmType != null)
+                    {
+                        var sb = new System.Text.StringBuilder("[unlockapi] NotesListManager: ");
+                        int n = 0;
+                        foreach (var m in nlmType.GetMethods(System.Reflection.BindingFlags.Public |
+                                                              System.Reflection.BindingFlags.NonPublic |
+                                                              System.Reflection.BindingFlags.Instance |
+                                                              System.Reflection.BindingFlags.Static))
+                        {
+                            if (m.Name.IndexOf("Unlock", StringComparison.OrdinalIgnoreCase) < 0 &&
+                                m.Name.IndexOf("NotesList", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                            var ps = m.GetParameters();
+                            sb.Append(n++ > 0 ? " | " : "").Append(m.ReturnType.Name).Append(' ')
+                              .Append(m.Name).Append('(');
+                            for (int i = 0; i < ps.Length; i++)
+                                sb.Append(i > 0 ? "," : "").Append(ps[i].ParameterType.Name);
+                            sb.Append(')');
+                        }
+                        Log.Info(sb.ToString());
+                    }
+                    var wrapType = AccessTools.TypeByName("Manager.NotesWrapper");
+                    if (wrapType != null)
+                    {
+                        var sb2 = new System.Text.StringBuilder("[unlockapi] NotesWrapper props: ");
+                        int n2 = 0;
+                        foreach (var p in wrapType.GetProperties(System.Reflection.BindingFlags.Public |
+                                                                 System.Reflection.BindingFlags.Instance))
+                            sb2.Append(n2++ > 0 ? " | " : "").Append(p.PropertyType.Name).Append(' ').Append(p.Name);
+                        Log.Info(sb2.ToString());
+                    }
+                }
+                catch (Exception e) { Log.Warn("CrashFixes: unlock API dump failed: " + e.Message); }
+
                 // Second empty-account crash: the map result screen indexes an empty userMapList.
                 var mapTarget = AccessTools.Method(typeof(Monitor.MapResultMonitor), "Initialize");
                 if (mapTarget != null)

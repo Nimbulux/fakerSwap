@@ -2760,6 +2760,7 @@ namespace FakerSwap.Flow
         //  用户一旦操作就整屏让给用户（自动化不再注入），直到界面切换。
         // ============================================================================================
         private static string _holdKey = "";
+        private static string _holdSuppressedKey = "";
         private static double _holdUntil = -1000;
         private static bool _holdUserTookOver;
         private static double _holdTookOverUntil = -1000;
@@ -2777,26 +2778,33 @@ namespace FakerSwap.Flow
             _holdUserTookOver = false;
         }
 
-        /// <summary>是否检测到真人输入（按住/触摸）。我们的注入在 hold 期间不会发生，所以任何输入都算用户。*</summary>
-        public static bool UserInputSeen()
+        /// <summary>是否检测到真人输入（按住/触摸）。会带出触发来源便于排查误判。</summary>
+        public static bool UserInputSeen(out string what)
         {
+            what = "";
             try
             {
                 for (int m = 0; m < 2; m++)
                 {
-                    if (Manager.InputManager.IsButtonPush(m)) return true;
-                    if (Manager.InputManager.IsTouchPanelPush(m)) return true;
-                    if (Manager.InputManager.IsTouchPanelDown(m)) return true;
-                    if (Manager.InputManager.GetTouchPanelAreaAnyDown(m)) return true;
+                    if (Manager.InputManager.IsButtonPush(m)) { what = "IsButtonPush(m" + m + ")"; return true; }
+                    if (Manager.InputManager.IsTouchPanelPush(m)) { what = "IsTouchPanelPush(m" + m + ")"; return true; }
+                    if (Manager.InputManager.IsTouchPanelDown(m)) { what = "IsTouchPanelDown(m" + m + ")"; return true; }
+                    if (Manager.InputManager.GetTouchPanelAreaAnyDown(m)) { what = "TouchPanelAreaDown(m" + m + ")"; return true; }
                     for (int b = 0; b <= 9; b++)
                     {
-                        try { if (Manager.InputManager.GetButtonPush(m, (Manager.InputManager.ButtonSetting)b)) return true; }
+                        try { if (Manager.InputManager.GetButtonPush(m, (Manager.InputManager.ButtonSetting)b)) { what = "ButtonPush#" + b + "(m" + m + ")"; return true; } }
                         catch (Exception) { }
                     }
                 }
             }
             catch (Exception) { }
             return false;
+        }
+
+        public static bool UserInputSeen()
+        {
+            string what;
+            return UserInputSeen(out what);
         }
 
 
@@ -2825,20 +2833,25 @@ namespace FakerSwap.Flow
                 _holdUserTookOver = false;
                 Log.Info("[hold] 界面 " + key + "：先停 " + (seconds > 0 ? seconds : 3.0).ToString("0.0") + "s 给用户操作（机台锁临时释放）");
             }
-            if (UserInputSeen())
+            // 本屏已经因为误判接管过一次 → 恢复后不再交给用户，避免被持续误判卡死到选曲超时。
+            bool suppressed = _holdSuppressedKey == _holdKey;
+            string source;
+            if (!suppressed && UserInputSeen(out source))
             {
                 if (!_holdUserTookOver)
                 {
                     _holdUserTookOver = true;
-                    _holdTookOverUntil = now + 15.0;   // 用户接管最多 15s，超时恢复自动化，避免「不动」
-                    Log.Info("[hold] 界面 " + key + "：检测到用户操作 → 本屏交给用户，自动化暂停");
+                    _holdTookOverUntil = now + 6.0;   // 接管最多 6s，超时恢复自动化
+                    Log.Info("[hold] 界面 " + key + "：检测到用户操作(" + source + ") → 本屏交给用户，自动化暂停");
                 }
                 return true;
             }
             if (_holdUserTookOver)
             {
                 if (now < _holdTookOverUntil) return true;
-                _holdUserTookOver = false;   // 用户 15s 没推进：恢复自动化
+                _holdUserTookOver = false;
+                _holdSuppressedKey = _holdKey;
+                Log.Info("[hold] 界面 " + key + "：接管时间到 → 恢复自动化（本屏不再交给用户）");
             }
             if (now < _holdUntil) return true;
             _holdUntil = -1000;

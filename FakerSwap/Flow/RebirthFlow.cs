@@ -2786,7 +2786,7 @@ namespace FakerSwap.Flow
                 return;
             }
             StatusText = "选择 " + slot.Item.MusicId + "-" + slot.Item.Level + " [" + tag + "] …";
-            if (StepAge > 25)
+            if (StepAge > 40)
             {
                 Log.Warn("[flow] 选曲超时诊断: music=" + slot.Item.MusicId + "-" + slot.Item.Level +
                          " navSubState=" + (Navigation.MusicSubState ?? "?") +
