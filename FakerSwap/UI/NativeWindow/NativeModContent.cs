@@ -790,6 +790,7 @@ namespace FakerSwap.UI.NativeWindow
             rightY = SettingsToggleRow(c, "选票保持（每次用上次手选的票）", s.TicketUseKeep,
                 UiActions.SetTicketUseKeep, rightX, rightY, colW);
             rightY = SettingsTicketRow(c, s, rightX, rightY, colW);
+            y = Math.Max(leftY, rightY);
             c.TextSmall("* 改动立即写入 FakerSwap/config.json；多数项下一批/下次开始任务生效。Dev/实验项仅测试用。",
                 x, y, width, c.S(18), Theme.Muted);
             y += c.S(24);
