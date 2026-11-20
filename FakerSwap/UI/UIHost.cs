@@ -236,10 +236,11 @@ namespace FakerSwap.UI
 
             var phase = RebirthFlow.Phase;
             snap.Phase = (int)phase;
-            snap.PhaseName = PhaseName(phase);
+            snap.PhaseName = (RebirthFlow.CrawlOnly && phase == FlowPhase.Transferring) ? "跑区中" : PhaseName(phase);
             snap.Status = RebirthFlow.StatusText ?? "";
             snap.LastError = RebirthFlow.LastError ?? "";
             snap.Busy = RebirthFlow.IsBusy;
+            snap.CrawlOnly = RebirthFlow.CrawlOnly;
             snap.GameStage = StageText();
 
             snap.LockActive = MachineLock.Active;

@@ -365,6 +365,51 @@ namespace FakerSwap.UI
             ApplySetting("只读模式=开", d => d.SafeNoWrite = true);
         }
 
+        // ---------------------------------------------------------------- dedicated area crawl
+
+        /// <summary>Start the dedicated crawl loop (no source data; needs a logged-in session).</summary>
+        public static void StartCrawl()
+        {
+            WindowRequests.Notice("正在启动跑区…");
+            MainThread.Post(() =>
+            {
+                try
+                {
+                    string error;
+                    if (!RebirthFlow.StartCrawl(out error))
+                    {
+                        WindowRequests.Notice("无法开始跑区：" + error);
+                        Log.Warn("UI: StartCrawl refused: " + error);
+                    }
+                    else
+                    {
+                        WindowRequests.Notice("跑区已开始（性隐 BASIC · AP）");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Log.Error("UI: StartCrawl failed", e);
+                    WindowRequests.Notice("跑区启动失败：" + e.Message);
+                }
+            });
+        }
+
+        public static void StopCrawl()
+        {
+            WindowRequests.Notice("正在停止跑区…");
+            MainThread.Post(() =>
+            {
+                try
+                {
+                    RebirthFlow.StopCrawl();
+                }
+                catch (Exception e)
+                {
+                    Log.Error("UI: StopCrawl failed", e);
+                }
+            });
+        }
+
         // ---------------------------------------------------------------- task control
 
         public static void StartTransfer()

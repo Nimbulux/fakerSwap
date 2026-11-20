@@ -490,6 +490,27 @@ namespace FakerSwap.UI.NativeWindow
                 x, y, width, c.S(18), Theme.Muted);
             y += c.S(22);
 
+            // ---- dedicated crawl (no source data needed) ----------------------------------
+            bool crawling = s.CrawlOnly && s.Busy;
+            bool canStart = s.LoggedIn && !s.SafeNoWrite && !s.Busy;
+            if (crawling)
+            {
+                if (c.Button("停止跑区", x, y, c.S(104), c.S(26), false)) UiActions.StopCrawl();
+                c.TextSmall("跑区中：credit " + s.CurrentCredit + " · 勾选区完成 " + s.CrawlCompletedCount +
+                            "/" + _areaSel.Count + " · " + s.GameStage,
+                    x + c.S(112), y, Math.Max(0, width - c.S(112)), c.S(26), Theme.Warn);
+            }
+            else
+            {
+                if (c.Button("开始跑区（不用源数据）", x, y, c.S(176), c.S(26), true, canStart)) UiActions.StartCrawl();
+                string why = !s.LoggedIn ? "需先刷卡登录" :
+                             s.SafeNoWrite ? "只读模式不能跑区（先解除只读）" :
+                             s.Busy ? "已有任务在运行" :
+                             "每 credit 3 轨性隐 BASIC（默认 100.5%/AP），勾选区跑完自动停";
+                c.TextSmall(why, x + c.S(184), y, Math.Max(0, width - c.S(184)), c.S(26), Theme.Muted);
+            }
+            y += c.S(30);
+
             int gap = c.S(6);
             int rowW = (width - gap * 3) / 4;
             if (c.Button("全选", x, y, rowW, c.S(26))) SelectAllAreas(s, true);

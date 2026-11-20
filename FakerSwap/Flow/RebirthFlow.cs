@@ -176,6 +176,9 @@ namespace FakerSwap.Flow
         // plan / batching
         private static List<List<Slot>> _batches = new List<List<Slot>>();
         private static int _batchIndex;
+        /// <summary>Dedicated area-crawl mode: no source data, every credit is 3 filler/AP tracks.</summary>
+        private static bool _crawlOnly;
+        private static int _crawlCreditLimit = 999;
         private static List<Slot> _credit = new List<Slot>();
         private static int _slot;
         private static int _startedInCredit;
@@ -1334,6 +1337,7 @@ namespace FakerSwap.Flow
                 error = "源数据为空";
                 return false;
             }
+            _crawlOnly = false;
             Plan = null;
             _loginWarned = false;
             _targetRecords = null;
@@ -1351,6 +1355,150 @@ namespace FakerSwap.Flow
             SetStep(Step.WaitLogin, "");
             Log.Info("flow: StartTransfer with source " + Source.DisplayName);
             return true;
+        }
+
+        // ---------------------------------------------------------------- dedicated area crawl (专门跑区)
+
+        /// <summary>True while the dedicated area-crawl mode owns the loop.</summary>
+        public static bool CrawlOnly { get { return _crawlOnly; } }
+
+        /// <summary>
+        /// 专用跑区：不需要源数据。每个 credit 打 3 轨（性隐 BASIC 默认拉满 AP），
+        /// 区域选择 / 课题曲 / 续关 / 上报全部复用转生流程；
+        /// 勾选区全部完成或达到 credit 上限后自动结束。需要已经在机台上刷卡登录。
+        /// </summary>
+        public static bool StartCrawl(out string error)
+        {
+            error = null;
+            if (ModConfig.Data.SafeNoWrite)
+            {
+                error = "只读模式 (SafeNoWrite=true)：跑区会写成绩，先在主界面解除只读。";
+                Log.Warn("flow: StartCrawl rejected - " + error);
+                return false;
+            }
+            if (IsBusy)
+            {
+                error = "已有任务在运行（" + Phase + "）";
+                return false;
+            }
+            int monitor;
+            if (!LoginHooks.IsLoggedIn(out monitor))
+            {
+                error = "请先在机台上刷卡登录（跑区不需要源数据，但需要登录会话）";
+                Log.Warn("flow: StartCrawl rejected - not logged in");
+                return false;
+            }
+
+            _crawlOnly = true;
+            _monitor = monitor;
+            Plan = null;
+            _targetRecords = null;
+            _targetRating = 0;
+            _batchIndex = 0;
+            _batchAdvancedInContinue = false;
+            _failLogged = false;
+            _failReason = "";
+            _stopping = false;
+            _resumeAfterRelogin = true;
+            _staleSessionAtStart = true;
+            _staleLogoutSent = false;
+            _crawlDone.Clear();
+            _crawlRound = 1;
+            _crawlLastAreaId = -1;
+            _crawlFallbackDefault = false;
+            _missionsPlayed = 0;
+            _crawlCreditLimit = Math.Max(1, ModConfig.Data.CrawlCreditLimit);
+            ResetSwipeBudget();
+
+            _batches = new List<List<Slot>>();
+            for (int i = 0; i < 3; i++) AddCrawlBatch();
+            SetPhase(FlowPhase.Transferring, "跑区");
+            SetStep(Step.BatchWaitMusicSelect, "");
+            BeginCredit();
+            Log.Info("[crawl] 跑区开始: 勾选 " +
+                     (ModConfig.Data.CrawlAreaIds != null ? ModConfig.Data.CrawlAreaIds.Count : 0) +
+                     " 个区, credit 上限 " + _crawlCreditLimit + ", 游玩模式=" + ModConfig.Data.PlayRealism);
+            return true;
+        }
+
+        /// <summary>停止跑区/转生（等同界面「中止」）。</summary>
+        public static void StopCrawl()
+        {
+            if (!IsBusy) return;
+            Abort();
+        }
+
+        private static void AddCrawlBatch()
+        {
+            var batch = new List<Slot>(3);
+            for (int i = 0; i < 3; i++)
+            {
+                var record = new ScoreRecord
+                {
+                    MusicId = ModConfig.Data.FillerMusicId,
+                    Level = ModConfig.Data.FillerLevel,
+                    PlayCount = 1,
+                    Achievement = Math.Max(ModConfig.Data.FillerAchievement, 1005000),
+                    NoMiss = true
+                };
+                batch.Add(new Slot
+                {
+                    Kind = SlotKind.Filler,
+                    Item = new TransferItem { Desired = record, Index = -1, SkipReason = "crawl" }
+                });
+            }
+            _batches.Add(batch);
+        }
+
+        /// <summary>
+        /// End conditions for the crawl loop: every selected area complete / credit limit reached.
+        /// Returns true when a new batch was appended (or one is already pending).
+        /// </summary>
+        private static bool EnsureCrawlBatch()
+        {
+            if (!_crawlOnly || _stopping) return false;
+            if (_batchIndex + 1 < _batches.Count) return true;
+            if (CurrentCredit >= _crawlCreditLimit)
+            {
+                Log.Info("[crawl] 达到 credit 上限 " + _crawlCreditLimit + " → 结束");
+                return false;
+            }
+            if (CrawlAreasAllComplete())
+            {
+                Log.Info("[crawl] 勾选的区域已全部完成 → 结束");
+                return false;
+            }
+            AddCrawlBatch();
+            Log.Info("[crawl] 追加 1 批（队尾 " + _batches.Count + " 批，已跑 " + CurrentCredit + " credit）");
+            return true;
+        }
+
+        private static bool CrawlAreasAllComplete()
+        {
+            try
+            {
+                var ids = ModConfig.Data.CrawlAreaIds;
+                if (ids == null || ids.Count == 0) return false;   // 没勾选 = 跑到 credit 上限
+                var areas = MapHooks.AvailableAreas;
+                if (areas == null || areas.Count == 0) return false;
+                for (int w = 0; w < ids.Count; w++)
+                {
+                    int id = ids[w];
+                    bool found = false;
+                    bool complete = false;
+                    for (int i = 0; i < areas.Count; i++)
+                    {
+                        var area = areas[i];
+                        if (area == null || area.Id != id) continue;
+                        found = true;
+                        complete = area.IsComplete;
+                        break;
+                    }
+                    if (!found || !complete) return false;
+                }
+                return true;
+            }
+            catch (Exception) { return false; }
         }
 
         /// <summary>Second confirmation: actually start pushing records.</summary>
@@ -2197,7 +2345,7 @@ namespace FakerSwap.Flow
                 Log.Info("[flow] 批次衔接: 上一批上传完成 → 本批开始 用时 " + handover.ToString("0.0") + "s");
             }
             if (_batchIndex < 0) _batchIndex = 0;
-            if (_batchIndex >= _batches.Count)
+            if (_batchIndex >= _batches.Count && !EnsureCrawlBatch())
             {
                 StartShutdown(false, "全部完成", FlowPhase.Finished);
                 return;
@@ -2977,7 +3125,7 @@ namespace FakerSwap.Flow
                 StartShutdown(false, "已中止", FlowPhase.Finished);
                 return;
             }
-            if (_batchIndex + 1 >= _batches.Count)
+            if (_batchIndex + 1 >= _batches.Count && !EnsureCrawlBatch())
             {
                 StartShutdown(false, "全部完成（" + (Plan != null ? Plan.Done : 0) + " 条）", FlowPhase.Finished);
                 return;
@@ -2988,7 +3136,7 @@ namespace FakerSwap.Flow
                 // Advance the credit cursor HERE (the logout path advances it in TickWaitLogout).
                 _batchIndex++;
                 _batchAdvancedInContinue = true;
-                if (_batchIndex >= _batches.Count)
+                if (_batchIndex >= _batches.Count && !EnsureCrawlBatch())
                 {
                     StartShutdown(false, "全部完成（" + (Plan != null ? Plan.Done : 0) + " 条）", FlowPhase.Finished);
                     return;
@@ -3038,7 +3186,7 @@ namespace FakerSwap.Flow
             _reloginSeen = false;
             _reloginByContinue = false;
             ResetSwipeBudget();
-            if (_batchIndex >= _batches.Count)
+            if (_batchIndex >= _batches.Count && !EnsureCrawlBatch())
             {
                 StartShutdown(false, "全部完成（" + (Plan != null ? Plan.Done : 0) + " 条）", FlowPhase.Finished);
                 return;
@@ -3628,6 +3776,7 @@ namespace FakerSwap.Flow
         {
             if (!_shutdownActive && Phase != FlowPhase.Stopping) return;
             _shutdownActive = false;
+            _crawlOnly = false;
             try
             {
                 LoginHooks.RestoreAccessCodeFiles();
@@ -3680,7 +3829,7 @@ namespace FakerSwap.Flow
                 if (need)
                 {
                     string reason = (Phase == FlowPhase.SourceLoginPending || Phase == FlowPhase.SourceReading)
-                        ? "获取源数据" : "转生";
+                        ? "获取源数据" : (_crawlOnly ? "跑区" : "转生");
                     if (!MachineLock.Active) MachineLock.On(reason, StatusText);
                     else MachineLock.Detail_(StatusText);
                 }

@@ -204,6 +204,8 @@ namespace FakerSwap.UI.NativeWindow
         public int AccountPoint;
         public int MusicCount;
         public int AreaCount;
+        /// <summary>True while the dedicated area-crawl mode owns the credit loop.</summary>
+        public bool CrawlOnly;
 
         // ---- area crawl panel -------------------------------------------------------------
         public AreaEntry[] Areas = EmptyAreas;

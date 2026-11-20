@@ -357,6 +357,9 @@ namespace FakerSwap.UI.NativeWindow
                 case TabSongs:
                     y = DrawSongs(c, s, x, y, width);
                     break;
+                case TabAreas:
+                    y = DrawCrawl(c, s, x, y, width);
+                    break;
                 case TabCollection:
                     y = DrawCollections(c, s, x, y, width);
                     break;
@@ -610,6 +613,63 @@ namespace FakerSwap.UI.NativeWindow
                 if (kind == 0 ? row.BaseInList : kind == 1 ? row.MasterInList : row.ReMasterInList) count++;
             }
             return count;
+        }
+
+        // ================================================================ crawl tab
+
+        private static int DrawCrawl(NativeCanvas c, WindowSnapshot s, int x, int y, int width)
+        {
+            bool writable = !s.SafeNoWrite && !s.Busy;
+            bool crawling = s.CrawlOnly && s.Busy;
+            int gap = c.S(6);
+            int rowH = c.S(26);
+
+            int cardH = c.S(58);
+            c.Fill(x, y, width, cardH, crawling ? Theme.Panel : Theme.PanelAlt);
+            c.Border(x, y, width, cardH, crawling ? Theme.Warn : Theme.Border);
+            c.Text(crawling ? "跑区进行中" : "跑区（专用模式）", x + c.S(10), y + c.S(4),
+                width - c.S(20), c.S(22), crawling ? Theme.Warn : Theme.Text, false, true);
+            string line = crawling
+                ? "credit " + s.CurrentCredit + " · 当前区 " +
+                  (string.IsNullOrEmpty(s.CrawlCurrentArea) ? "—" : s.CrawlCurrentArea) +
+                  " · 勾选区完成 " + s.CrawlCompletedCount + "/" + s.SelectedAreaIds.Length
+                : "不需要源数据：登录后每个 credit 打 3 轨性隐 BASIC（默认 100.5% / AP），自动选区、课题曲、续关、上报";
+            c.TextSmall(line, x + c.S(10), y + c.S(28), Math.Max(0, width - c.S(20)), c.S(18), Theme.Muted);
+            y += cardH + c.S(6);
+
+            int aw = c.S(150);
+            if (crawling)
+            {
+                if (c.Button("停止跑区", x, y, aw, rowH, false)) UiActions.StopCrawl();
+            }
+            else if (c.Button("开始跑区", x, y, aw, rowH, true, writable && s.LoggedIn))
+            {
+                UiActions.StartCrawl();
+            }
+            if (c.Button("刷新区域列表", x + aw + gap, y, c.S(120), rowH, false, !crawling))
+                UiActions.RefreshAreas();
+            if (!s.LoggedIn)
+            {
+                c.TextSmall("未登录：先在机台上刷卡登录（跑区不需要源数据，但需要会话）",
+                    x + aw + c.S(126) + gap, y, Math.Max(0, width - aw - c.S(126) - gap), rowH, Theme.Warn);
+            }
+            else if (s.SafeNoWrite)
+            {
+                c.TextSmall("只读模式：跑区会写成绩，先解除只读",
+                    x + aw + c.S(126) + gap, y, Math.Max(0, width - aw - c.S(126) - gap), rowH, Theme.Bad);
+            }
+            y += rowH + c.S(8);
+
+            c.TextSmall("勾选要跑的区：主界面「区域（爬图）」面板（Title 阶段也能勾，保存进 config.json 的 CrawlAreaIds）。",
+                x, y, width, c.S(18), Theme.Muted);
+            y += c.S(20);
+            c.TextSmall("结束条件：勾选区全部完成 / 达到 config 的 CrawlCreditLimit（默认 999 credit）/ 你点停止。",
+                x, y, width, c.S(18), Theme.Muted);
+            y += c.S(20);
+            c.TextSmall("跑区建议 C·真实时长；填充轨默认 100.5% AP，地图距离加成拉满；普通课题曲 80% 过、挑战曲按规则。",
+                x, y, width, c.S(18), Theme.Muted);
+            y += c.S(24);
+            return y;
         }
 
         // ================================================================ collection tab

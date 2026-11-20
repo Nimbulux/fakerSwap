@@ -260,38 +260,18 @@ namespace FakerSwap.Data
 
         private static List<UserItem> GetCollectionList(UserData ud, CollectionKind kind)
         {
-            switch (kind)
+            // Field-backed read: other mods patch the UserData getters to return every master item.
+            var list = UserDataAccess.GetCollectionList(ud, (int)kind);
+            if (list == null)
             {
-                case CollectionKind.Title:
-                    if (ud.TitleList == null) ud.TitleList = new List<UserItem>();
-                    return ud.TitleList;
-                case CollectionKind.Icon:
-                    if (ud.IconList == null) ud.IconList = new List<UserItem>();
-                    return ud.IconList;
-                case CollectionKind.Plate:
-                    if (ud.PlateList == null) ud.PlateList = new List<UserItem>();
-                    return ud.PlateList;
-                case CollectionKind.Frame:
-                    if (ud.FrameList == null) ud.FrameList = new List<UserItem>();
-                    return ud.FrameList;
-                case CollectionKind.Partner:
-                    if (ud.PartnerList == null) ud.PartnerList = new List<UserItem>();
-                    return ud.PartnerList;
-                default:
-                    return null;
+                Log.Warn("[unlock] 无法读取真实的 " + kind + " 列表（字段缺失？）");
             }
+            return list;
         }
 
         private static void SetCollectionList(UserData ud, CollectionKind kind, List<UserItem> list)
         {
-            switch (kind)
-            {
-                case CollectionKind.Title: ud.TitleList = list; break;
-                case CollectionKind.Icon: ud.IconList = list; break;
-                case CollectionKind.Plate: ud.PlateList = list; break;
-                case CollectionKind.Frame: ud.FrameList = list; break;
-                case CollectionKind.Partner: ud.PartnerList = list; break;
-            }
+            UserDataAccess.SetCollectionList(ud, (int)kind, list);
         }
 
         private static List<int> GetMasterCollectionIds(DataManager dm, CollectionKind kind)

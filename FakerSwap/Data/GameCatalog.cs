@@ -260,15 +260,8 @@ namespace FakerSwap.Data
         private static List<UserItem> OwnedList(UserData ud, int kind)
         {
             if (ud == null) return null;
-            switch (kind)
-            {
-                case 0: return ud.TitleList;
-                case 1: return ud.IconList;
-                case 2: return ud.PlateList;
-                case 3: return ud.FrameList;
-                case 4: return ud.PartnerList;
-                default: return null;
-            }
+            // Field-backed read: collection getters may be Harmony-patched to return everything.
+            return UserDataAccess.GetCollectionList(ud, kind);
         }
 
         private static void FillSet(List<int> source, HashSet<int> target)
