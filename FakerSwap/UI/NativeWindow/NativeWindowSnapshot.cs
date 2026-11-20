@@ -186,6 +186,22 @@ namespace FakerSwap.UI.NativeWindow
         public string VersionText = "";
         public bool WindowVisible = true;
 
+        // ---- about panel: environment + live account (read on the game thread) -----------
+        public string GameVersion = "";
+        public string UnityVersion = "";
+        public string LoaderVersion = "";
+        public string ServerUri = "";
+        public bool LoggedIn;
+        public string AccountName = "";
+        public long AccountId;
+        public int AccountRating;
+        public int AccountHighestRating;
+        public int AccountPlayCount;
+        public int AccountMapStock;
+        public int AccountPoint;
+        public int MusicCount;
+        public int AreaCount;
+
         // ---- area crawl panel -------------------------------------------------------------
         public AreaEntry[] Areas = EmptyAreas;
         public int AreaVersion;

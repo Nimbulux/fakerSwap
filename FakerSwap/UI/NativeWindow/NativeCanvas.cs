@@ -321,6 +321,27 @@ namespace FakerSwap.UI.NativeWindow
             Fill(x, y, w, Math.Max(1, S(1)), Theme.Border);
         }
 
+        /// <summary>
+        /// Filled polygon in content coordinates.  Coordinates are converted with
+        /// <see cref="ScreenY"/> and the DC clip region (set by BeginContent) takes care of
+        /// scroll clipping.  Used by the rotating About icon - no GDI world transform needed.
+        /// </summary>
+        public void Polygon(int[] xs, int[] ys, uint color)
+        {
+            if (xs == null || ys == null || xs.Length != ys.Length || xs.Length < 3) return;
+            var points = new Win32.POINT[xs.Length];
+            for (int i = 0; i < points.Length; i++)
+            {
+                points[i].x = xs[i];
+                points[i].y = ScreenY(ys[i]);
+            }
+            IntPtr oldBrush = Win32.SelectObject(Dc, GetBrush(color));
+            IntPtr oldPen = Win32.SelectObject(Dc, GetPen(color));
+            Win32.Polygon(Dc, points, points.Length);
+            Win32.SelectObject(Dc, oldBrush);
+            Win32.SelectObject(Dc, oldPen);
+        }
+
         private void DrawText(IntPtr font, string text, int x, int y, int w, int h, uint color, bool center)
         {
             if (w <= 0 || h <= 0) return;

@@ -13,6 +13,8 @@ namespace FakerSwap.Core
         public static string BackupDir => Path.Combine(Root, "Backup");
         public static string SourceDir => Path.Combine(Root, "Source");
         public static string ConfigPath => Path.Combine(Root, "config.json");
+        /// <summary>Window-thread local UI state (About rotation / secret-menu unlock). Never config.json.</summary>
+        public static string UiStatePath => Path.Combine(Root, "ui-state.txt");
 
         public static void EnsureDirs()
         {

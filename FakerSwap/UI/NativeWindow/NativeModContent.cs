@@ -62,6 +62,16 @@ namespace FakerSwap.UI.NativeWindow
             _openDropdownField = 0;
             _dropdownOptions = null;
             _queueExpanded = false;
+            AboutPanel.Release();
+        }
+
+        /// <summary>True while an animation (About windmill) needs a fast repaint timer.</summary>
+        public static bool WantsFastTicks { get { return AboutPanel.Animating; } }
+
+        /// <summary>Window-thread global key hook (ESC closes the secret menu).</summary>
+        public static bool HandleKey(int virtualKey)
+        {
+            return AboutPanel.HandleKey(virtualKey);
         }
 
         public static void Render(NativeCanvas c)
@@ -91,6 +101,12 @@ namespace FakerSwap.UI.NativeWindow
 
             // While a confirmation dialog / dropdown is up the page below must not react to
             // clicks: park the pending click, draw the page, then hand it to the overlay.
+            bool secret = AboutPanel.SecretOpen;
+            if (secret)
+            {
+                _unlockDialog = false;
+                _openDropdownField = 0;
+            }
             bool modal = _unlockDialog;
             bool dropdown = _openDropdownField != 0;
             bool suppress = modal || dropdown;
@@ -107,7 +123,8 @@ namespace FakerSwap.UI.NativeWindow
             int height;
             try
             {
-                if (s.Phase == (int)FlowPhase.AwaitingConfirm) height = DrawConfirm(c, s);
+                if (secret) height = AboutPanel.DrawSecret(c, s);
+                else if (s.Phase == (int)FlowPhase.AwaitingConfirm) height = DrawConfirm(c, s);
                 else if (IsTaskPhase(s.Phase)) height = DrawTask(c, s);
                 else height = DrawHome(c, s);
             }
@@ -362,6 +379,7 @@ namespace FakerSwap.UI.NativeWindow
 
             y = DrawSettingsPanel(c, s, x, y, width);
             y = DrawAreaPanel(c, s, x, y, width);
+            y = AboutPanel.Draw(c, s, x, y, width);
             return y + pad;
         }
 

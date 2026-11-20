@@ -330,6 +330,8 @@ namespace FakerSwap.UI
             snap.VersionText = BuildInfo.Version;
             snap.WindowVisible = NativeModWindow.IsVisible;
 
+            ReadEnvironment(snap);
+
             ReadPlan(snap, cfg);
             ReadQueue(snap);
 
@@ -365,6 +367,56 @@ namespace FakerSwap.UI
             }
 
             return snap;
+        }
+
+        /// <summary>
+        /// Fills the About panel / secret-menu live fields from the game itself.  Runs on the Unity
+        /// main thread (it touches Unity and the game singletons), the window thread only ever sees
+        /// this plain copy inside the immutable snapshot.
+        /// </summary>
+        private static void ReadEnvironment(WindowSnapshot snap)
+        {
+            try { snap.GameVersion = UnityEngine.Application.version ?? ""; }
+            catch (Exception) { }
+            try { snap.UnityVersion = UnityEngine.Application.unityVersion ?? ""; }
+            catch (Exception) { }
+            try
+            {
+                var asm = typeof(MelonLoader.MelonMod).Assembly;
+                if (asm != null && asm.GetName() != null) snap.LoaderVersion = asm.GetName().Version.ToString();
+            }
+            catch (Exception) { }
+
+            try
+            {
+                var op = MAI2.Util.Singleton<Manager.OperationManager>.Instance;
+                snap.ServerUri = op != null ? (op.GetBaseUri() ?? "") : "";
+            }
+            catch (Exception) { }
+
+            try
+            {
+                var ud = UserDataPatcher.GetLive(0);
+                if (ud != null && ud.Detail != null && !ud.IsGuest())
+                {
+                    snap.LoggedIn = ud.IsEntry;
+                    snap.AccountName = ud.Detail.UserName ?? "";
+                    snap.AccountId = (long)ud.Detail.UserID;
+                    snap.AccountRating = (int)ud.Detail.Rating;
+                    snap.AccountHighestRating = (int)ud.Detail.HighestRating;
+                    snap.AccountPlayCount = (int)ud.Detail.PlayCount;
+                    snap.AccountMapStock = (int)ud.Detail.MapStock;
+                    snap.AccountPoint = (int)ud.Detail.Point;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Warn("UIHost: reading account for About failed: " + e.Message);
+            }
+
+            try { snap.MusicCount = ChartCatalog.KnownMusicCount; }
+            catch (Exception) { }
+            snap.AreaCount = _areas.Count;
         }
 
         private static void ReadPlan(WindowSnapshot snap, ConfigData cfg)

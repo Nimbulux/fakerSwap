@@ -53,6 +53,7 @@ namespace FakerSwap.UI.NativeWindow
         private static string _lastTitle = "";
         private static int _generation;
         private static int _timerTicks;
+        private static uint _timerInterval = 120;
         private static string _lastSavedBounds = "";
 
         private static int _defaultX = 60;
@@ -333,6 +334,13 @@ namespace FakerSwap.UI.NativeWindow
                             _timerTicks = 0;
                             SaveBoundsIfChanged();
                         }
+                        // Animations (About windmill) need ~60fps; idle only needs the 120ms refresh.
+                        uint wanted = NativeModContent.WantsFastTicks ? 16u : 120u;
+                        if (wanted != _timerInterval)
+                        {
+                            _timerInterval = wanted;
+                            Win32.SetTimer(hWnd, (IntPtr)1, wanted, IntPtr.Zero);
+                        }
                         if (_visible) Win32.InvalidateRect(hWnd, IntPtr.Zero, false);
                         return IntPtr.Zero;
                     case Win32.WM_MOUSEMOVE:
@@ -360,9 +368,17 @@ namespace FakerSwap.UI.NativeWindow
                         Win32.InvalidateRect(hWnd, IntPtr.Zero, false);
                         return IntPtr.Zero;
                     case Win32.WM_KEYDOWN:
-                        if (_canvas != null) _canvas.OnKeyDown((int)(wParam.ToInt64() & 0xFFFF));
+                    {
+                        int virtualKey = (int)(wParam.ToInt64() & 0xFFFF);
+                        if (NativeModContent.HandleKey(virtualKey))
+                        {
+                            Win32.InvalidateRect(hWnd, IntPtr.Zero, false);
+                            return IntPtr.Zero;
+                        }
+                        if (_canvas != null) _canvas.OnKeyDown(virtualKey);
                         Win32.InvalidateRect(hWnd, IntPtr.Zero, false);
                         return IntPtr.Zero;
+                    }
                     case Win32.WM_GETMINMAXINFO:
                     {
                         var info = (Win32.MINMAXINFO)Marshal.PtrToStructure(lParam, typeof(Win32.MINMAXINFO));

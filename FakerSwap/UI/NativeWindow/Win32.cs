@@ -317,6 +317,10 @@ namespace FakerSwap.UI.NativeWindow
         [DllImport("gdi32.dll")]
         public static extern int LineTo(IntPtr hdc, int x, int y);
 
+        /// <summary>Filled polygon (uses the currently selected brush for the fill and pen for the outline).</summary>
+        [DllImport("gdi32.dll")]
+        public static extern bool Polygon(IntPtr hdc, POINT[] lpPoints, int nCount);
+
         [DllImport("gdi32.dll")]
         public static extern bool SetViewportOrgEx(IntPtr hdc, int x, int y, IntPtr lpPoint);
 
