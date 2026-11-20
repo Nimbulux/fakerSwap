@@ -2726,6 +2726,12 @@ namespace FakerSwap.Flow
                     if (Manager.InputManager.IsButtonPush(m)) return true;
                     if (Manager.InputManager.IsTouchPanelPush(m)) return true;
                     if (Manager.InputManager.IsTouchPanelDown(m)) return true;
+                    if (Manager.InputManager.GetTouchPanelAreaAnyDown(m)) return true;
+                    for (int b = 0; b <= 9; b++)
+                    {
+                        try { if (Manager.InputManager.GetButtonPush(m, (Manager.InputManager.ButtonSetting)b)) return true; }
+                        catch (Exception) { }
+                    }
                 }
             }
             catch (Exception) { }
@@ -3021,21 +3027,10 @@ namespace FakerSwap.Flow
                 EnsureCountdownStoppedForGameplay();
 
             // 选区页：**绝不 fade 跳过**。  ManualAreaSelect=true 时完全不动，留给人工确认
-            // 角色选择 / 票券选择：账号没有角色数据时原版会在 CharacterSelectProcess.OnStart 崩
-            // (InsertLockChara -> First())，CrashFixes 会合成槽位；这里负责把页面正常按过去。
+            // 角色选择：完整交给 HandleCharacterSelect（先展示 10 秒，玩家可自己选；不提前按）。
             if (NavProcess.HasName("Process.CharacterSelectProcess", "Process.CharacterSelectProces"))
             {
-                double nowChara = Time.realtimeSinceStartup;
-                if (nowChara - _charaPageAt > 1.0)
-                {
-                    _charaPageAt = nowChara;
-                    bool pressed = PressSyntheticButton(0, ConfirmButtonName);
-                    if (Time.realtimeSinceStartup - _charaPageLogAt > 3.0)
-                    {
-                        _charaPageLogAt = Time.realtimeSinceStartup;
-                        Log.Info("[nav] 角色/票券页: 按決定 Button01 ok=" + pressed + " stack=[" + NavProcess.StackNames() + "]");
-                    }
-                }
+                HandleCharacterSelect(0);
                 return false;
             }
 
