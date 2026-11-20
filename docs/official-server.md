@@ -63,3 +63,14 @@
 - `UploadUserPlaylog`（单曲 playlog）仍由游戏生成，若其 `achievement`/`deluxscore`
   与改写后的行差异过大，官方服可能校验不一致——当前流程依赖游戏先按目标判定结算；
 - 已被服务端拒绝的包可在 `Package\Sinmai-Assist\NetworkLogs\` 里按时间对照请求/响应。
+
+## 8. 用户接管（UserHoldSec，默认 3 秒）
+
+每个需要选择的界面（MODE SELECT / 区域 / 票券 / 旅行伙伴 / 选歌各屏 / 续关 / Entry 确认）
+进入后先停 `UserHoldSec` 秒：
+
+- 期间**释放机台锁**，玩家可以直接操作；
+- 检测到真人输入（按钮/触摸）→ 该屏整屏交给玩家，插件不再注入，直到界面切换；
+- 无操作 → 3 秒后插件继续原自动流程。
+
+配置项：`"UserHoldSec": 3.0`（0 = 关闭）。

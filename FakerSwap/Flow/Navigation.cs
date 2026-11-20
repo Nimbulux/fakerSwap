@@ -2350,6 +2350,7 @@ namespace FakerSwap.Flow
         /// </summary>
         public static int DriveRegionalSelect(int monitor = 0)
         {
+            if (HoldForUser("area:" + monitor, ModConfig.Data.UserHoldSec)) return 0;
             try
             {
                 var process = NavProcess.Find<Process.RegionalSelectProcess>();
@@ -2500,6 +2501,7 @@ namespace FakerSwap.Flow
         /// </summary>
         private static bool HandleTicketSelect(int monitor)
         {
+            if (HoldForUser("ticket:" + monitor, ModConfig.Data.UserHoldSec)) return false;
             try
             {
                 var process = FindLiveByName("TicketSelectProcess");
@@ -2691,8 +2693,75 @@ namespace FakerSwap.Flow
         }
 
 
+        // ============================================================================================
+        //  用户接管：每个需要选择的界面先停 N 秒（默认 3s），期间释放机台锁；
+        //  用户一旦操作就整屏让给用户（自动化不再注入），直到界面切换。
+        // ============================================================================================
+        private static string _holdKey = "";
+        private static double _holdUntil = -1000;
+        private static bool _holdUserTookOver;
+
+        /// <summary>当前是否处在「让用户操作」窗口（机台锁应临时释放）。</summary>
+        public static bool UserHoldActive
+        {
+            get { return Time.realtimeSinceStartup < _holdUntil || _holdUserTookOver; }
+        }
+
+        public static void ResetUserHold()
+        {
+            _holdKey = "";
+            _holdUntil = -1000;
+            _holdUserTookOver = false;
+        }
+
+        /// <summary>是否检测到真人输入（按住/触摸）。我们的注入在 hold 期间不会发生，所以任何输入都算用户。*</summary>
+        public static bool UserInputSeen()
+        {
+            try
+            {
+                for (int m = 0; m < 2; m++)
+                {
+                    if (Manager.InputManager.IsButtonPush(m)) return true;
+                    if (Manager.InputManager.IsTouchPanelPush(m)) return true;
+                    if (Manager.InputManager.IsTouchPanelDown(m)) return true;
+                }
+            }
+            catch (Exception) { }
+            return false;
+        }
+
+        /// <summary>
+        /// 需要选择的界面调用：返回 true = 现在不要注入（等待 3s / 用户已接管）。
+        /// key 用「界面名:monitor」，界面切换后重新计时。
+        /// </summary>
+        public static bool HoldForUser(string key, double seconds)
+        {
+            double now = Time.realtimeSinceStartup;
+            if (key != _holdKey)
+            {
+                _holdKey = key;
+                _holdUntil = now + (seconds > 0 ? seconds : 3.0);
+                _holdUserTookOver = false;
+                Log.Info("[hold] 界面 " + key + "：先停 " + (seconds > 0 ? seconds : 3.0).ToString("0.0") + "s 给用户操作（机台锁临时释放）");
+            }
+            if (UserInputSeen())
+            {
+                if (!_holdUserTookOver)
+                {
+                    _holdUserTookOver = true;
+                    Log.Info("[hold] 界面 " + key + "：检测到用户操作 → 本屏交给用户，自动化暂停");
+                }
+                return true;
+            }
+            if (_holdUserTookOver) return true;
+            if (now < _holdUntil) return true;
+            _holdUntil = -1000;
+            return false;
+        }
+
         private static bool HandleCharacterSelect(int monitor)
         {
+            if (HoldForUser("chara:" + monitor, ModConfig.Data.UserHoldSec)) return false;
             try
             {
                 var process = NavProcess.FindByName("CharacterSelectProces", "CharacterSelectProcess");
@@ -4050,6 +4119,7 @@ namespace FakerSwap.Flow
         /// </summary>
         private static bool HandleModeSelect(Process.ModeSelect.ModeSelectProcess modeSelect, bool fromUpdateInput)
         {
+            if (HoldForUser("mode:0", ModConfig.Data.UserHoldSec)) return false;
             if (modeSelect == null) return false;
             if (!IsTaskActive()) return false;
             TrackPhaseChange();
@@ -5250,6 +5320,7 @@ namespace FakerSwap.Flow
                                   sub == "Menu" || sub == "Option" || sub == "Character" ||
                                   sub == "SortSetting";
                 if (!advancable) return false;
+                if (HoldForUser("music:" + player + ":" + sub, ModConfig.Data.UserHoldSec)) return true;
 
                 // 各屏进入前把选择数据写好
                 if (sub == "Genre")

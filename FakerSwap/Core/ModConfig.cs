@@ -60,6 +60,8 @@ namespace FakerSwap.Core
         public bool LongSongDirectWrite = false;
         /// <summary>判定表跨音符类型随机散布（更像真人；关掉则用 data-dev per-type 计数）。</summary>
         public bool RealisticJudgeSpread = true;
+        /// <summary>每个需要选择的界面先停几秒交给用户操作（期间释放机台锁）。0=关闭。</summary>
+        public double UserHoldSec = 3.0;
         /// <summary>长版歌曲模式：PlayWithOne=正常游玩（长曲占2轨+1首普通，2 playlogs）/ Skip / DirectWrite。</summary>
         public string LongSongMode = "PlayWithOne";
 
@@ -190,6 +192,7 @@ namespace FakerSwap.Core
                 d.SkipLongSongs = root["SkipLongSongs"].AsBool(d.SkipLongSongs);
                 d.LongSongDirectWrite = root["LongSongDirectWrite"].AsBool(d.LongSongDirectWrite);
                 d.RealisticJudgeSpread = root["RealisticJudgeSpread"].AsBool(d.RealisticJudgeSpread);
+                d.UserHoldSec = root["UserHoldSec"].AsDouble(d.UserHoldSec);
                 d.LongSongMode = root["LongSongMode"].AsString(d.LongSongMode);
                 d.AreaSelectTimeoutSec = root["AreaSelectTimeoutSec"].AsDouble(d.AreaSelectTimeoutSec);
                 d.AutoAddMissionSongs = root["AutoAddMissionSongs"].AsBool(d.AutoAddMissionSongs);
@@ -269,6 +272,7 @@ namespace FakerSwap.Core
                 o["SkipLongSongs"] = JsonValue.Of(d.SkipLongSongs);
                 o["LongSongDirectWrite"] = JsonValue.Of(d.LongSongDirectWrite);
                 o["RealisticJudgeSpread"] = JsonValue.Of(d.RealisticJudgeSpread);
+                o["UserHoldSec"] = JsonValue.Of(d.UserHoldSec);
                 o["LongSongMode"] = JsonValue.Of(d.LongSongMode);
                 o["AreaSelectTimeoutSec"] = JsonValue.Of(d.AreaSelectTimeoutSec);
                 o["MaxMissionCredits"] = JsonValue.Of(d.MaxMissionCredits);

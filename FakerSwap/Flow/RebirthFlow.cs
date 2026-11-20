@@ -243,6 +243,7 @@ namespace FakerSwap.Flow
             _longFlushDone = false;
             _autoConfirmRelogin = false;
             _uploadedThisRun.Clear();
+            Navigation.ResetUserHold();
             _missionsPlayed = 0;
             _slot = 0;
             _startedInCredit = 0;
@@ -3353,6 +3354,7 @@ namespace FakerSwap.Flow
 
         private static bool TryPressContinueYes()
         {
+            if (Navigation.HoldForUser("continue", ModConfig.Data.UserHoldSec)) return true;
             if (ManualContinueYes || ContinueDiag.InputSilenced)
             {
                 if (!_manualContinueLogged)
@@ -3639,6 +3641,11 @@ namespace FakerSwap.Flow
 
         private static void SyncMachineLock()
         {
+            if (Navigation.UserHoldActive)
+            {
+                if (MachineLock.Active) MachineLock.Off();
+                return;
+            }
             try
             {
                 bool need = Phase == FlowPhase.SourceLoginPending || Phase == FlowPhase.SourceReading
