@@ -111,7 +111,7 @@ namespace FakerSwap.Core
         /// <summary>While true the mod refuses every account-mutating operation (read-only mode).</summary>
         public bool SafeNoWrite = true;
         /// <summary>Swallow all cabinet/menu input while a task runs.</summary>
-        public bool LockInput = true;
+        public bool LockInput = false;   // 默认不锁输入：等待时可自由玩，插件仍用注入按键
         public bool Verbose = false;
 
         // ---- DEV / TEST ONLY (keep both false for real use) ----

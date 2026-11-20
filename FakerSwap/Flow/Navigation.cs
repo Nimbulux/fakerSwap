@@ -53,7 +53,9 @@ namespace FakerSwap.Flow
         {
             double perTrack = ChartSelectOverheadSec + StartSelectionOverheadSec + ResultToSelectSec;
             if (skipCharts) perTrack += SkipToSettleSec;
-            return MusicSelectFixedOverheadSec + 3.0 * perTrack;
+            // 每个选择界面会先停 UserHoldSec 秒给用户操作（MODE/区域/票券/伙伴/选歌 4 屏/续关 ≈ 8 次）
+            double holdSec = 8.0 * Math.Max(0.0, ModConfig.Data.UserHoldSec);
+            return MusicSelectFixedOverheadSec + 3.0 * perTrack + holdSec;
         }
 
         // ============================================================================================

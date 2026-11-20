@@ -166,7 +166,7 @@ namespace FakerSwap.UI.NativeWindow
         public string PlayMode = "";
         public bool TopMost = true;
         public bool ShowBanner = true;
-        public bool LockInput = true;
+        public bool LockInput = false;
         public bool SafeNoWrite;
         public int FillerMusicId;
         public int FillerLevel;
