@@ -36,3 +36,5 @@ FakerSwap/docs/
 
 # local log snapshots
 .tmp-logs/
+
+FakerSwap/Libs/*.bak
