@@ -245,7 +245,7 @@ namespace FakerSwap.UI
                 {
                     bool ok = UnlockService.Flush("manual");
                     WindowRequests.Notice(ok
-                        ? "已请求游戏存档上传（等它走到 DataSave 完成）"
+                        ? "已请求游戏存档上传（会走 DataSave 并登出，完成后再登录即可看到解锁）"
                         : "无法立即上传：请在选歌页再点一次，或打一首 B·秒跳 结算后自动上传");
                 }
                 catch (Exception e)

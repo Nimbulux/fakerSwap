@@ -465,9 +465,9 @@ namespace FakerSwap.UI.NativeWindow
                 UiActions.UnlockSongs(PageUnlockIds.ToArray(), _includeMaster, _includeRemaster);
             if (c.Button("解锁全部未写入", x + aw + gap, y, aw, rowH, true, writable && songs.Length > 0))
                 UiActions.UnlockAllSongs(_includeMaster, _includeRemaster);
-            if (c.Button("存档上传", x + (aw + gap) * 2, y, c.S(96), rowH, false, writable))
+            if (c.Button("存档上传(登出)", x + (aw + gap) * 2, y, c.S(116), rowH, false, writable))
                 UiActions.FlushUnlocks();
-            if (c.Button("清空搜索", x + (aw + gap) * 2 + c.S(102), y, c.S(90), rowH))
+            if (c.Button("清空搜索", x + (aw + gap) * 2 + c.S(122), y, c.S(90), rowH))
             {
                 _songSearch = "";
                 _songPage = 0;
@@ -669,7 +669,7 @@ namespace FakerSwap.UI.NativeWindow
             y += c.S(4);
             int aw = c.S(150);
             if (c.Button("全部补全", x, y, aw, rowH, true, writable)) UiActions.UnlockAllCollections();
-            if (c.Button("存档上传", x + aw + gap, y, c.S(96), rowH, false, writable)) UiActions.FlushUnlocks();
+            if (c.Button("存档上传(登出)", x + aw + gap, y, c.S(116), rowH, false, writable)) UiActions.FlushUnlocks();
             y += rowH + c.S(4);
             c.TextSmall("· 称号/头像/姓名框/背景/伙伴走 userItemList（收藏类），不用打歌。",
                 x, y, width, c.S(18), Theme.Muted);
