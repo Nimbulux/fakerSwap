@@ -1,5 +1,6 @@
 using System;
 using FakerSwap.Core;
+using FakerSwap.Data;
 using FakerSwap.Flow;
 using FakerSwap.UI.NativeWindow;
 
@@ -89,6 +90,8 @@ namespace FakerSwap.UI
 
         public static void RefreshAreas()
         {
+            try { AreaCatalog.MarkStale(); }
+            catch (Exception) { }
             WindowRequests.RequestAreasRefresh();
             WindowRequests.Notice("正在刷新区域列表…");
         }
@@ -127,6 +130,128 @@ namespace FakerSwap.UI
                 catch (Exception e)
                 {
                     Log.Error("UI: SetCrawlFallback failed", e);
+                }
+            });
+        }
+
+        // ---------------------------------------------------------------- secret menu: catalog + unlock
+
+        /// <summary>Re-read the game's music/collection tables into the window-safe copy.</summary>
+        public static void RefreshGameCatalog()
+        {
+            WindowRequests.Notice("正在读取游戏数据…");
+            MainThread.Post(() =>
+            {
+                try
+                {
+                    GameCatalog.Refresh();
+                    string message = GameCatalog.HasData
+                        ? "数据已刷新：" + GameCatalog.Songs.Length + " 首曲目"
+                        : (string.IsNullOrEmpty(GameCatalog.Error) ? "游戏数据为空" : GameCatalog.Error);
+                    WindowRequests.Notice(message);
+                }
+                catch (Exception e)
+                {
+                    Log.Error("UI: RefreshGameCatalog failed", e);
+                    WindowRequests.Notice("读取失败：" + e.Message);
+                }
+            });
+        }
+
+        /// <summary>Write the given songs into the live unlock lists (game uploads them later).</summary>
+        public static void UnlockSongs(int[] ids, bool master, bool remaster)
+        {
+            if (ids == null || ids.Length == 0)
+            {
+                WindowRequests.Notice("没有需要解锁的曲目");
+                return;
+            }
+            int[] copy = (int[])ids.Clone();
+            MainThread.Post(() =>
+            {
+                try
+                {
+                    int cap = ModConfig.Data.UnlockBatchRows;
+                    var result = UnlockService.UnlockSongs(0, copy, true, master, remaster, cap);
+                    GameCatalog.MarkStale();
+                    WindowRequests.Notice("解锁歌曲：" + result);
+                    Log.Info("[unlock] " + result);
+                }
+                catch (Exception e)
+                {
+                    Log.Error("UI: UnlockSongs failed", e);
+                    WindowRequests.Notice("解锁失败：" + e.Message);
+                }
+            });
+        }
+
+        /// <summary>Add every song that is not yet in the unlock lists (batched by UnlockBatchRows).</summary>
+        public static void UnlockAllSongs(bool master, bool remaster)
+        {
+            MainThread.Post(() =>
+            {
+                try
+                {
+                    int cap = ModConfig.Data.UnlockBatchRows;
+                    var result = UnlockService.UnlockAllSongs(0, true, master, remaster, cap);
+                    GameCatalog.MarkStale();
+                    WindowRequests.Notice("全曲解锁：" + result);
+                    Log.Info("[unlock] " + result);
+                }
+                catch (Exception e)
+                {
+                    Log.Error("UI: UnlockAllSongs failed", e);
+                    WindowRequests.Notice("全曲解锁失败：" + e.Message);
+                }
+            });
+        }
+
+        /// <summary>Add every collection item (titles/icons/plates/frames/partners) to the live UserData.</summary>
+        public static void UnlockAllCollections()
+        {
+            UnlockCollections(0x1F);
+        }
+
+        /// <summary>Same, but only the kinds selected by <paramref name="mask"/> (bit0 titles .. bit4 partners).</summary>
+        public static void UnlockCollections(int mask)
+        {
+            if (mask == 0) mask = 0x1F;
+            int bits = mask;
+            MainThread.Post(() =>
+            {
+                try
+                {
+                    var result = UnlockService.UnlockCollections(0,
+                        (bits & 0x01) != 0, (bits & 0x02) != 0, (bits & 0x04) != 0,
+                        (bits & 0x08) != 0, (bits & 0x10) != 0);
+                    GameCatalog.MarkStale();
+                    WindowRequests.Notice("收藏品解锁：" + result);
+                    Log.Info("[unlock] " + result);
+                }
+                catch (Exception e)
+                {
+                    Log.Error("UI: UnlockCollections failed", e);
+                    WindowRequests.Notice("收藏品解锁失败：" + e.Message);
+                }
+            });
+        }
+
+        /// <summary>Ask the game to run its own DataSave chain so the written lists reach the server.</summary>
+        public static void FlushUnlocks()
+        {
+            MainThread.Post(() =>
+            {
+                try
+                {
+                    bool ok = UnlockService.Flush("manual");
+                    WindowRequests.Notice(ok
+                        ? "已请求游戏存档上传（等它走到 DataSave 完成）"
+                        : "无法立即上传：请在选歌页再点一次，或打一首 B·秒跳 结算后自动上传");
+                }
+                catch (Exception e)
+                {
+                    Log.Error("UI: FlushUnlocks failed", e);
+                    WindowRequests.Notice("上传请求失败：" + e.Message);
                 }
             });
         }

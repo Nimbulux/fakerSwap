@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using FakerSwap.Core;
+using FakerSwap.Data;
 using HarmonyLib;
 using Manager;
 using Process;
@@ -574,11 +575,14 @@ namespace FakerSwap.Flow
             CurrentAreaId = areaId;
             int[] ids = GetAreaBonusMusicIds(areaId);
             if (ids.Length == 0) return 0;
-            int level = Math.Max(0, Math.Min(4, ModConfig.Data.MinLevel));
+            int preferred = Math.Max(0, Math.Min(4, ModConfig.Data.MinLevel));
             int added = 0;
             for (int i = 0; i < ids.Length && added < max; i++)
             {
                 int musicId = ids[i];
+                // 普通课题曲不限难度：配置难度不存在时退到这首曲子实际存在的难度。
+                int level = PickMissionLevel(musicId, preferred);
+                if (level < 0) continue;
                 bool dup = false;
                 for (int k = 0; k < PendingMissionCharts.Count; k++)
                     if (PendingMissionCharts[k].MusicId == musicId) { dup = true; break; }
@@ -599,9 +603,22 @@ namespace FakerSwap.Flow
                 MissionTaskActive = true;
                 MissionSource = "AreaBonus(" + areaId + ") x" + added;
                 Log.Info("[map] 区域课题曲: area=" + areaId + " 组=" + GetAreaBonusId(areaId) +
-                         " 表中 " + ids.Length + " 首 → 加入 " + added + " 首 (level=" + level + ")");
+                         " 表中 " + ids.Length + " 首 → 加入 " + added + " 首 (level=" + preferred + " 起)");
             }
             return added;
+        }
+
+        /// <summary>难度选择：优先配置的难度，不存在则退到这首曲子实际带的最低难度；都没有返回 -1。</summary>
+        private static int PickMissionLevel(int musicId, int preferred)
+        {
+            try
+            {
+                if (ChartCatalog.Exists(musicId, preferred)) return preferred;
+                for (int level = 0; level <= 4; level++)
+                    if (ChartCatalog.Exists(musicId, level)) return level;
+            }
+            catch (Exception) { }
+            return -1;
         }
 
         public static MissionChart[] TakeMissionCharts()

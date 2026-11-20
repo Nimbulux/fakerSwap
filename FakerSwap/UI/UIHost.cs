@@ -38,6 +38,7 @@ namespace FakerSwap.UI
         private static int _areaVersion;
         private static string _areaError = "";
         private static int _lastLoggedAreaCount = -1;
+        private static long _lastAccountId = -1;
         private static int _lastAreaRefreshId = -2;
 
         private static double _transferStartedAt = -1;
@@ -133,6 +134,10 @@ namespace FakerSwap.UI
                            (areaChanged || _areas.Count == 0 || RebirthFlow.IsBusy);
             if (forceAreas || areaChanged || areaDue)
             {
+                // Offline catalog first: it works at Title / before login and keeps the panel
+                // populated when the game is not on the area-select screen.
+                try { AreaCatalog.RefreshIfStale(); }
+                catch (Exception e) { Log.Warn("UIHost: AreaCatalog refresh failed: " + e.Message); }
                 LoadAreas();
                 _lastAreaRefreshId = currentAreaId;
                 _nextAreaRefresh = now + AreaRefreshInterval;
@@ -417,6 +422,16 @@ namespace FakerSwap.UI
             try { snap.MusicCount = ChartCatalog.KnownMusicCount; }
             catch (Exception) { }
             snap.AreaCount = _areas.Count;
+
+            // Account switch: the unlock/area copies belong to the previous account.
+            if (snap.AccountId != _lastAccountId)
+            {
+                _lastAccountId = snap.AccountId;
+                try { AreaCatalog.MarkStale(); }
+                catch (Exception) { }
+                try { GameCatalog.MarkStale(); }
+                catch (Exception) { }
+            }
         }
 
         private static void ReadPlan(WindowSnapshot snap, ConfigData cfg)
@@ -607,6 +622,7 @@ namespace FakerSwap.UI
                 entry.Distance = source.Distance;
                 entry.Progress = source.Progress;
                 entry.Total = source.Total;
+                entry.LockKnown = source.LockKnown;
                 entries[i] = entry;
             }
             return entries;
@@ -617,17 +633,25 @@ namespace FakerSwap.UI
             try
             {
                 var list = AreaBridge.ReadAreas();
+                string error = AreaBridge.LastError ?? "";
+                if (list.Count == 0)
+                {
+                    // Not on the area-select screen: fall back to the offline catalog built from
+                    // UserData.MapList / DataManager.GetMapDatas / areas.json / XML.
+                    list = BuildOfflineAreaDtos();
+                    error = AreaCatalog.Count > 0
+                        ? "列表来自" + AreaCatalog.Source + "（不进选区页也能勾选）"
+                        : (string.IsNullOrEmpty(AreaCatalog.Error) ? error : AreaCatalog.Error);
+                }
                 if (list.Count == 0 && _areas.Count > 0)
                 {
-                    // Outside the area-select screen ListAreas returns nothing: keep the last
-                    // known list so the operator can still tick areas before a run.
-                    _areaError = AreaBridge.LastError;
+                    _areaError = error;
                     _areaVersion++;
                     return;
                 }
                 _areas.Clear();
                 _areas.AddRange(list);
-                _areaError = AreaBridge.LastError ?? "";
+                _areaError = error;
                 _areaVersion++;
                 if (_lastLoggedAreaCount != _areas.Count)
                 {
@@ -640,6 +664,39 @@ namespace FakerSwap.UI
                 _areaError = e.Message;
                 Log.Warn("UIHost: area list failed: " + e.Message);
             }
+        }
+
+        /// <summary>Copies the main-thread-built AreaCatalog into the window DTO list.</summary>
+        private static List<AreaInfoDto> BuildOfflineAreaDtos()
+        {
+            var result = new List<AreaInfoDto>();
+            try
+            {
+                var rows = AreaCatalog.Areas;
+                for (int i = 0; i < rows.Length; i++)
+                {
+                    var row = rows[i];
+                    if (row == null) continue;
+                    var dto = new AreaInfoDto();
+                    dto.Index = i;
+                    dto.Id = row.Id;
+                    dto.Name = string.IsNullOrEmpty(row.Name) ? "区域 #" + row.Id : row.Name;
+                    dto.IsClear = row.IsClear;
+                    dto.IsComplete = row.IsComplete;
+                    dto.IsLock = row.IsLock;
+                    dto.LockKnown = row.HasUserState;
+                    dto.IsEvent = row.IsCollabo;
+                    dto.IsInfinity = row.IsInfinity;
+                    dto.IsCurrent = false;
+                    dto.Distance = row.Distance;
+                    result.Add(dto);
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Warn("UIHost: BuildOfflineAreaDtos failed: " + e.Message);
+            }
+            return result;
         }
 
         private static bool SourcesMayChange()

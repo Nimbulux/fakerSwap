@@ -75,6 +75,15 @@ namespace FakerSwap.Core
         /// <summary>普通课题曲的目标成绩（1/10000 %）。默认 80%（通关线）。挑战曲会自动用 100%。</summary>
         public int MissionAchievement = 800000;
 
+        /// <summary>填充轨（性隐 BASIC）的目标成绩；绿谱没人看，拉满拿 AP / 跑图加成。</summary>
+        public int FillerAchievement = 1005000;
+
+        /// <summary>填充轨是否真的写成绩（false = 老行为：跳过且不改成绩）。</summary>
+        public bool FillerScoreEnable = true;
+
+        /// <summary>解锁写入每批最多多少条 userItem（防止一次上传太大被服务端拒）。</summary>
+        public int UnlockBatchRows = 200;
+
         /// <summary>自动刷卡（写 aime.txt + 回车）。默认 false：只停在登录页，等人工刷卡。</summary>
         public bool AutoSwipe = false;
         /// <summary>Areas the operator wants to crawl (empty = all / whatever the game offers).</summary>
@@ -198,6 +207,12 @@ namespace FakerSwap.Core
                 d.AutoAddMissionSongs = root["AutoAddMissionSongs"].AsBool(d.AutoAddMissionSongs);
                 d.AutoSwipe = root["AutoSwipe"].AsBool(d.AutoSwipe);
                 d.MaxMissionCredits = root["MaxMissionCredits"].AsInt(d.MaxMissionCredits);
+                d.MissionAchievement = root["MissionAchievement"].AsInt(d.MissionAchievement);
+                d.FillerAchievement = root["FillerAchievement"].AsInt(d.FillerAchievement);
+                d.FillerScoreEnable = root["FillerScoreEnable"].AsBool(d.FillerScoreEnable);
+                d.UnlockBatchRows = root["UnlockBatchRows"].AsInt(d.UnlockBatchRows);
+                if (d.UnlockBatchRows < 10) d.UnlockBatchRows = 10;
+                if (d.UnlockBatchRows > 1000) d.UnlockBatchRows = 1000;
                 d.ManualAreaSelect = root["ManualAreaSelect"].AsBool(d.ManualAreaSelect);
                 d.TicketUseNext = root["TicketUseNext"].AsBool(d.TicketUseNext);
                 d.TicketUseKeep = root["TicketUseKeep"].AsBool(d.TicketUseKeep);
@@ -276,6 +291,10 @@ namespace FakerSwap.Core
                 o["LongSongMode"] = JsonValue.Of(d.LongSongMode);
                 o["AreaSelectTimeoutSec"] = JsonValue.Of(d.AreaSelectTimeoutSec);
                 o["MaxMissionCredits"] = JsonValue.Of(d.MaxMissionCredits);
+                o["MissionAchievement"] = JsonValue.Of(d.MissionAchievement);
+                o["FillerAchievement"] = JsonValue.Of(d.FillerAchievement);
+                o["FillerScoreEnable"] = JsonValue.Of(d.FillerScoreEnable);
+                o["UnlockBatchRows"] = JsonValue.Of(d.UnlockBatchRows);
                 o["ManualAreaSelect"] = JsonValue.Of(d.ManualAreaSelect);
                 o["TicketUseNext"] = JsonValue.Of(d.TicketUseNext);
                 o["TicketUseKeep"] = JsonValue.Of(d.TicketUseKeep);

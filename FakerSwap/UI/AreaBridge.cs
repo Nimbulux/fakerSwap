@@ -20,6 +20,8 @@ namespace FakerSwap.UI
         public uint Distance;
         public int Progress;
         public int Total;
+        /// <summary>False when the row came from the offline catalog and the account state is unknown.</summary>
+        public bool LockKnown = true;
     }
 
     /// <summary>

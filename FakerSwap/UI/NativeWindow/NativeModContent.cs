@@ -480,8 +480,11 @@ namespace FakerSwap.UI.NativeWindow
             string status = "当前区域：" + current +
                             "   ·   本轮已爬 " + s.CrawlDoneThisRound + " 个" +
                             "   ·   勾选区完成 " + s.CrawlCompletedCount + " / " + _areaSel.Count +
-                            (s.AtAreaSelect ? "   ·   正在区域选择页" : "");
+                            (s.AtAreaSelect ? "   ·   正在区域选择页" : "   ·   未进选区页（用离线列表勾选）");
             c.TextSmall(status, x, y, width, c.S(18), s.AtAreaSelect ? Theme.Warn : Theme.Muted);
+            y += c.S(20);
+            c.TextSmall("跑区建议：设置里选「C·真实时长」，填充轨已默认拉满 AP（地图距离有加成）；课题曲普通 80% 过、挑战曲按规则。",
+                x, y, width, c.S(18), Theme.Muted);
             y += c.S(22);
 
             int gap = c.S(6);
@@ -508,9 +511,9 @@ namespace FakerSwap.UI.NativeWindow
                 int emptyH = c.S(46);
                 c.Fill(x, y, width, emptyH, Theme.PanelAlt);
                 c.Border(x, y, width, emptyH, Theme.Border);
-                string message = string.IsNullOrEmpty(s.AreaError) ? "区域列表暂不可用（等待 nav 接口）" : s.AreaError;
+                var message = string.IsNullOrEmpty(s.AreaError) ? "区域列表暂不可用（等待 nav 接口）" : s.AreaError;
                 c.TextSmall(message, x + c.S(10), y + c.S(4), width - c.S(20), c.S(18), Theme.Warn);
-                c.TextSmall("区域列表只在游戏进入「区域选择页」时可用；这里会缓存上次抓到的列表。",
+                c.TextSmall("区域列表来自游戏主数据/缓存，Title 阶段也能勾选；登录后自动补上进度与锁定状态。",
                     x + c.S(10), y + c.S(22), width - c.S(20), c.S(16), Theme.Muted);
                 return y + emptyH + c.S(8);
             }

@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using FakerSwap.Core;
+using FakerSwap.Data;
 using FakerSwap.UI;
 
 namespace FakerSwap.UI.NativeWindow
@@ -23,6 +25,14 @@ namespace FakerSwap.UI.NativeWindow
         private const int SpinMs = 300;
 
         private static readonly string[] TabNames = { "总览", "曲库", "区域", "收藏", "票券", "工具" };
+        private const int TabOverview = 0;
+        private const int TabSongs = 1;
+        private const int TabAreas = 2;
+        private const int TabCollection = 3;
+        private const int TabTickets = 4;
+        private const int TabTools = 5;
+        private const int SongPageSize = 14;
+        private const int SongSearchId = 9101;
 
         // persisted
         private static bool _expanded;
@@ -37,6 +47,15 @@ namespace FakerSwap.UI.NativeWindow
         private static bool _resetScroll;
         private static int _tab;
         private static string _statePath;
+
+        // catalog / unlock page state (window thread only)
+        private static int _songPage;
+        private static string _songSearch = "";
+        private static int _songFilter;
+        private static bool _includeMaster = true;
+        private static bool _includeRemaster = true;
+        private static bool _catalogRequested;
+        private static string _unlockNote = "";
 
         /// <summary>True while the secret-menu page is replacing the home page.</summary>
         public static bool SecretOpen { get; private set; }
@@ -72,6 +91,8 @@ namespace FakerSwap.UI.NativeWindow
             SecretOpen = true;
             _tab = 0;
             _resetScroll = true;
+            _catalogRequested = false;   // refresh the game copy each time the menu is opened
+            _songPage = 0;
         }
 
         public static void CloseSecret()
@@ -312,17 +333,41 @@ namespace FakerSwap.UI.NativeWindow
                     width - c.S(20), c.S(28), Theme.Warn);
                 y += c.S(34);
             }
+            if (s.SafeNoWrite)
+            {
+                c.Fill(x, y, width, c.S(28), Theme.BadDark);
+                c.Border(x, y, width, c.S(28), Theme.Bad);
+                c.Text("只读模式（SafeNoWrite=true）：解锁写入会被拒绝，先在主界面「解除只读」。",
+                    x + c.S(10), y, width - c.S(20), c.S(28), Theme.Bad);
+                y += c.S(34);
+            }
+
+            EnsureCatalog();
 
             switch (_tab)
             {
-                case 0:
+                case TabOverview:
                     y = DrawOverview(c, s, x, y, width);
+                    break;
+                case TabSongs:
+                    y = DrawSongs(c, s, x, y, width);
+                    break;
+                case TabCollection:
+                    y = DrawCollections(c, s, x, y, width);
                     break;
                 default:
                     y = DrawTodo(c, s, x, y, width);
                     break;
             }
             return y + pad;
+        }
+
+        private static void EnsureCatalog()
+        {
+            if (_catalogRequested) return;
+            _catalogRequested = true;
+            try { UiActions.RefreshGameCatalog(); }
+            catch (Exception e) { Log.Warn("AboutPanel: catalog refresh request failed: " + e.Message); }
         }
 
         private static int DrawTodo(NativeCanvas c, WindowSnapshot s, int x, int y, int width)
@@ -378,6 +423,261 @@ namespace FakerSwap.UI.NativeWindow
         {
             c.Text(title, leftX, leftY, colW, c.S(22), Theme.Accent, false, true);
             return leftY + c.S(24);
+        }
+
+        // ================================================================ songs tab
+
+        private static readonly List<int> PageUnlockIds = new List<int>();
+
+        private static int DrawSongs(NativeCanvas c, WindowSnapshot s, int x, int y, int width)
+        {
+            bool writable = !s.SafeNoWrite && !s.Busy;
+            var songs = GameCatalog.Songs;
+            string error = GameCatalog.Error;
+            int gap = c.S(6);
+            int rowH = c.S(26);
+
+            // ---- row 1: search / filter / refresh / difficulty toggles ---------------------
+            int searchW = Math.Min(width / 3, c.S(260));
+            _songSearch = c.TextField(_songSearch, SongSearchId, x, y, searchW, rowH);
+            int bx = x + searchW + gap;
+
+            int fw = c.S(82);
+            if (c.Button("全部", bx, y, fw, rowH, _songFilter == 0)) { _songFilter = 0; _songPage = 0; }
+            bx += fw + gap;
+            if (c.Button("未写入", bx, y, fw, rowH, _songFilter == 1)) { _songFilter = 1; _songPage = 0; }
+            bx += fw + gap;
+            if (c.Button("已写入", bx, y, fw, rowH, _songFilter == 2)) { _songFilter = 2; _songPage = 0; }
+            bx += fw + gap;
+
+            if (c.Button("刷新", bx, y, c.S(58), rowH)) UiActions.RefreshGameCatalog();
+            bx += c.S(58) + gap;
+
+            int tw = c.S(82);
+            _includeMaster = c.Toggle(_includeMaster, "含紫谱", bx, y, tw, rowH);
+            bx += tw + gap;
+            _includeRemaster = c.Toggle(_includeRemaster, "含白谱", bx, y, tw, rowH);
+            y += rowH + gap;
+
+            // ---- row 2: batch actions ------------------------------------------------------
+            int aw = c.S(150);
+            if (c.Button("解锁本页未写入", x, y, aw, rowH, false, writable && songs.Length > 0))
+                UiActions.UnlockSongs(PageUnlockIds.ToArray(), _includeMaster, _includeRemaster);
+            if (c.Button("解锁全部未写入", x + aw + gap, y, aw, rowH, true, writable && songs.Length > 0))
+                UiActions.UnlockAllSongs(_includeMaster, _includeRemaster);
+            if (c.Button("存档上传", x + (aw + gap) * 2, y, c.S(96), rowH, false, writable))
+                UiActions.FlushUnlocks();
+            if (c.Button("清空搜索", x + (aw + gap) * 2 + c.S(102), y, c.S(90), rowH))
+            {
+                _songSearch = "";
+                _songPage = 0;
+            }
+            y += rowH + c.S(4);
+
+            // ---- status --------------------------------------------------------------------
+            string status;
+            if (songs.Length == 0)
+            {
+                status = "尚未读取数据" + (string.IsNullOrEmpty(error) ? "（正在读取…）" : "：" + error);
+            }
+            else
+            {
+                status = "曲库 " + songs.Length + " 首 · 本体已写入 " + CountInList(songs, 0) +
+                         " · 紫 " + CountInList(songs, 1) + " · 白 " + CountInList(songs, 2);
+            }
+            c.TextSmall(status, x, y, width, c.S(18), Theme.Muted);
+            y += c.S(20);
+
+            // ---- column header -------------------------------------------------------------
+            int idW = c.S(56);
+            int artistW = c.S(168);
+            int lvW = c.S(42);
+            int flagW = c.S(70);
+            int btnW = c.S(60);
+            int titleW = width - idW - artistW - lvW * 5 - flagW - btnW - gap * 3;
+            if (titleW < c.S(150)) titleW = c.S(150);
+
+            int hx = x;
+            c.TextSmall("ID", hx, y, idW, c.S(16), Theme.Muted);
+            hx += idW;
+            c.TextSmall("曲名", hx, y, titleW, c.S(16), Theme.Muted);
+            hx += titleW;
+            c.TextSmall("艺术家", hx, y, artistW, c.S(16), Theme.Muted);
+            hx += artistW;
+            string[] shortLevel = { "B", "A", "E", "M", "R" };
+            for (int lv = 0; lv < 5; lv++)
+            {
+                c.TextSmall(shortLevel[lv], hx, y, lvW, c.S(16), Theme.Muted);
+                hx += lvW;
+            }
+            c.TextSmall("解锁项", hx, y, flagW, c.S(16), Theme.Muted);
+            y += c.S(18);
+
+            // ---- rows ----------------------------------------------------------------------
+            int total = 0;
+            for (int i = 0; i < songs.Length; i++)
+                if (SongMatches(songs[i])) total++;
+
+            int maxPage = Math.Max(1, (total + SongPageSize - 1) / SongPageSize);
+            if (_songPage >= maxPage) _songPage = maxPage - 1;
+            if (_songPage < 0) _songPage = 0;
+            int start = _songPage * SongPageSize;
+
+            PageUnlockIds.Clear();
+            int passed = 0;
+            int drawn = 0;
+            for (int i = 0; i < songs.Length; i++)
+            {
+                var row = songs[i];
+                if (!SongMatches(row)) continue;
+                if (passed++ < start) continue;
+                if (drawn >= SongPageSize) continue;
+                drawn++;
+                if (row.Id > 0 && !row.BaseInList) PageUnlockIds.Add(row.Id);
+                DrawSongRow(c, row, x, y, width, idW, titleW, artistW, lvW, flagW, btnW, gap, writable);
+                y += c.S(24);
+            }
+
+            if (total == 0)
+            {
+                c.TextSmall("没有匹配的曲目。", x, y, width, c.S(20), Theme.Muted);
+                y += c.S(24);
+            }
+
+            // ---- paging --------------------------------------------------------------------
+            y += c.S(4);
+            int navW = c.S(64);
+            if (c.Button("上一页", x, y, navW, rowH, false, _songPage > 0)) _songPage--;
+            if (c.Button("下一页", x + navW + gap, y, navW, rowH, false, _songPage < maxPage - 1)) _songPage++;
+            c.TextSmall("第 " + (_songPage + 1) + " / " + maxPage + " 页   ·   共 " + total + " 首（每页 " + SongPageSize +
+                        "）   ·   勾选/搜索后「解锁本页未写入」", x + (navW + gap) * 2, y, width - (navW + gap) * 2,
+                        rowH, Theme.Muted);
+            y += rowH + c.S(2);
+            c.TextSmall("提示：标准曲（id<10000）的紫/白谱天生解锁；本体解锁写 itemKind=5，紫/白写 6/7。",
+                x, y, width, c.S(18), Theme.Muted);
+            y += c.S(20);
+            return y;
+        }
+
+        private static void DrawSongRow(NativeCanvas c, GameCatalog.SongRow row, int x, int y, int width,
+            int idW, int titleW, int artistW, int lvW, int flagW, int btnW, int gap, bool writable)
+        {
+            bool hover = c.HoverAt(x, y, width, c.S(24));
+            if (hover) c.Fill(x, y, width, c.S(24), Theme.PanelAlt);
+
+            int hx = x;
+            c.TextSmall(row.Id.ToString(CultureInfo.InvariantCulture), hx, y, idW, c.S(24), Theme.Muted);
+            hx += idW;
+            c.Text(row.Title, hx, y, titleW, c.S(24), Theme.Text);
+            hx += titleW;
+            c.TextSmall(row.Artist, hx, y, artistW, c.S(24), Theme.Muted);
+            hx += artistW;
+            for (int lv = 0; lv < 5; lv++)
+            {
+                string text = row.LevelText(lv);
+                uint color = text == "—" ? Theme.Disabled : (lv >= 3 ? Theme.Accent : Theme.Text);
+                c.TextSmall(text, hx, y, lvW, c.S(24), color);
+                hx += lvW;
+            }
+            string flag = row.BaseInList ? "✓ 已写入" : "✗ 未写入";
+            c.TextSmall(flag, hx, y, flagW, c.S(24), row.BaseInList ? Theme.Good : Theme.Warn);
+            hx += flagW + gap;
+
+            if (c.Button("写入", hx, y + c.S(1), btnW, c.S(22), false, writable))
+                UiActions.UnlockSongs(new[] { row.Id }, _includeMaster, _includeRemaster);
+        }
+
+        private static bool SongMatches(GameCatalog.SongRow row)
+        {
+            if (row == null) return false;
+            if (_songFilter == 1 && row.BaseInList) return false;
+            if (_songFilter == 2 && !row.BaseInList) return false;
+            string query = _songSearch;
+            if (string.IsNullOrEmpty(query)) return true;
+            query = query.Trim();
+            if (query.Length == 0) return true;
+            if (query[0] == '#')
+            {
+                int id;
+                return int.TryParse(query.Substring(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out id) && row.Id == id;
+            }
+            if (row.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            if (row.Artist.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
+            int parsed;
+            return int.TryParse(query, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) && row.Id == parsed;
+        }
+
+        private static int CountInList(GameCatalog.SongRow[] songs, int kind)
+        {
+            int count = 0;
+            for (int i = 0; i < songs.Length; i++)
+            {
+                var row = songs[i];
+                if (row == null) continue;
+                if (kind == 0 ? row.BaseInList : kind == 1 ? row.MasterInList : row.ReMasterInList) count++;
+            }
+            return count;
+        }
+
+        // ================================================================ collection tab
+
+        private static int DrawCollections(NativeCanvas c, WindowSnapshot s, int x, int y, int width)
+        {
+            bool writable = !s.SafeNoWrite && !s.Busy;
+            var infos = GameCatalog.Collections;
+            int gap = c.S(6);
+            int rowH = c.S(26);
+
+            if (infos.Length == 0)
+            {
+                string error = GameCatalog.Error;
+                c.Fill(x, y, width, c.S(46), Theme.PanelAlt);
+                c.Border(x, y, width, c.S(46), Theme.Border);
+                c.TextSmall("收藏品数据还没读到" + (string.IsNullOrEmpty(error) ? "（正在读取…）" : "：" + error),
+                    x + c.S(10), y + c.S(4), width - c.S(20), c.S(18), Theme.Warn);
+                if (c.Button("重新读取", x + width - c.S(110), y + c.S(9), c.S(100), c.S(26))) UiActions.RefreshGameCatalog();
+                return y + c.S(54);
+            }
+
+            c.TextSmall("来源：DataManager 主数据 vs 当前账号 UserData 收藏列表。写入后由游戏自己的 UpsertUserAll 上传。",
+                x, y, width, c.S(18), Theme.Muted);
+            y += c.S(22);
+
+            for (int i = 0; i < infos.Length; i++)
+            {
+                var info = infos[i];
+                bool complete = info.Total > 0 && info.Owned >= info.Total;
+                int barW = Math.Min(c.S(220), width / 4);
+                int nameW = c.S(80);
+                int countW = c.S(110);
+
+                c.Fill(x, y, width, rowH + c.S(6), i % 2 == 0 ? Theme.PanelAlt : Theme.Panel);
+                c.Text(info.Name, x + c.S(8), y, nameW, rowH + c.S(6), Theme.Text);
+                c.TextSmall(info.Owned + " / " + info.Total, x + c.S(8) + nameW, y, countW, rowH + c.S(6),
+                    complete ? Theme.Good : Theme.Muted);
+                double ratio = info.Total > 0 ? (double)info.Owned / info.Total : 0;
+                c.ProgressBar(x + c.S(8) + nameW + countW, y + c.S(9), barW, c.S(12), ratio,
+                    complete ? Theme.Good : Theme.AccentDark, Theme.Track);
+                if (c.Button(complete ? "已全" : "补全", x + width - c.S(84), y + c.S(5), c.S(76), c.S(24),
+                        false, writable && !complete))
+                {
+                    UiActions.UnlockCollections(1 << i);
+                }
+                y += rowH + c.S(8);
+            }
+
+            y += c.S(4);
+            int aw = c.S(150);
+            if (c.Button("全部补全", x, y, aw, rowH, true, writable)) UiActions.UnlockAllCollections();
+            if (c.Button("存档上传", x + aw + gap, y, c.S(96), rowH, false, writable)) UiActions.FlushUnlocks();
+            y += rowH + c.S(4);
+            c.TextSmall("· 称号/头像/姓名框/背景/伙伴走 userItemList（收藏类），不用打歌。",
+                x, y, width, c.S(18), Theme.Muted);
+            y += c.S(18);
+            c.TextSmall("· 写入只在内存里生效；点「存档上传」或等下一次结算，游戏会自己发给服务器。",
+                x, y, width, c.S(18), Theme.Muted);
+            y += c.S(20);
+            return y;
         }
 
         // ================================================================ persistence

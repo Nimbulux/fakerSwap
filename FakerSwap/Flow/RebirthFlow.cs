@@ -2102,7 +2102,9 @@ namespace FakerSwap.Flow
                     MusicId = ModConfig.Data.FillerMusicId,
                     Level = ModConfig.Data.FillerLevel,
                     PlayCount = 1,
-                    Achievement = 0
+                    // 绿谱没人看：默认拉满拿 AP，跑图距离有加成（FillerScoreEnable=false 时仍按老行为跳过）。
+                    Achievement = ModConfig.Data.FillerAchievement,
+                    NoMiss = true
                 };
                 batch.Add(new Slot
                 {
@@ -2452,9 +2454,17 @@ namespace FakerSwap.Flow
                 {
                     ScoreHooks.BeginSkipUnmodified();
                 }
-                else if (slot.Kind == SlotKind.Filler || (forcedSkip && !unmodified))
+                else if (forcedSkip && !unmodified)
                 {
                     ScoreHooks.BeginFiller();
+                }
+                else if (slot.Kind == SlotKind.Filler)
+                {
+                    // 填充轨（性隐 BASIC）：默认写满分/AP 拿跑图加成；关掉 FillerScoreEnable 才是老行为。
+                    if (ModConfig.Data.FillerScoreEnable && slot.Item != null && slot.Item.Desired != null)
+                        ScoreHooks.BeginTransfer(slot.Item.Desired);
+                    else
+                        ScoreHooks.BeginFiller();
                 }
                 else if (unmodified)
                 {

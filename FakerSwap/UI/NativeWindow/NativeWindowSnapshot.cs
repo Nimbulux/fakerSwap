@@ -38,6 +38,8 @@ namespace FakerSwap.UI.NativeWindow
         public uint Distance;
         public int Progress;
         public int Total;
+        /// <summary>False when the row came from the offline catalog (account lock/clear state unknown).</summary>
+        public bool LockKnown = true;
 
         /// <summary>Right-hand progress text: "3 / 5", "进度 12345" or "—".</summary>
         public string ProgressText
@@ -55,12 +57,13 @@ namespace FakerSwap.UI.NativeWindow
         {
             get
             {
-                if (IsLock) return "锁定";
+                if (LockKnown && IsLock) return "锁定";
                 if (IsInfinity) return "无限";
                 if (IsEvent) return "活动";
                 if (IsComplete) return "已完成";
                 if (IsClear) return "已通关";
                 if (IsCurrent) return "当前";
+                if (!LockKnown) return "离线";
                 return "";
             }
         }
