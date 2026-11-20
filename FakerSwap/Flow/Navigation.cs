@@ -2707,11 +2707,12 @@ namespace FakerSwap.Flow
         private static string _holdKey = "";
         private static double _holdUntil = -1000;
         private static bool _holdUserTookOver;
+        private static double _holdTookOverUntil = -1000;
 
         /// <summary>当前是否处在「让用户操作」窗口（机台锁应临时释放）。</summary>
         public static bool UserHoldActive
         {
-            get { return Time.realtimeSinceStartup < _holdUntil || _holdUserTookOver; }
+            get { double n = Time.realtimeSinceStartup; return n < _holdUntil || (_holdUserTookOver && n < _holdTookOverUntil); }
         }
 
         public static void ResetUserHold()
@@ -2774,11 +2775,16 @@ namespace FakerSwap.Flow
                 if (!_holdUserTookOver)
                 {
                     _holdUserTookOver = true;
+                    _holdTookOverUntil = now + 15.0;   // 用户接管最多 15s，超时恢复自动化，避免「不动」
                     Log.Info("[hold] 界面 " + key + "：检测到用户操作 → 本屏交给用户，自动化暂停");
                 }
                 return true;
             }
-            if (_holdUserTookOver) return true;
+            if (_holdUserTookOver)
+            {
+                if (now < _holdTookOverUntil) return true;
+                _holdUserTookOver = false;   // 用户 15s 没推进：恢复自动化
+            }
             if (now < _holdUntil) return true;
             _holdUntil = -1000;
             return false;
