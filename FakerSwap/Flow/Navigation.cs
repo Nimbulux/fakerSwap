@@ -2775,46 +2775,32 @@ namespace FakerSwap.Flow
 
         private static bool HandleCharacterSelect(int monitor)
         {
-            if (HoldForUser("chara:" + monitor, ModConfig.Data.UserHoldSec)) return false;
             try
             {
                 var process = NavProcess.FindByName("CharacterSelectProces", "CharacterSelectProcess");
-                if (process == null)
-                {
-                    _charaAt = -1000;
-                    _charaStateLogged = -1;
-                    _charaSince = -1;
-                    _charaPressed = false;
-                    return false;
-                }
-                int state = GetInstanceInt(process, "_state");
-                double now = Time.realtimeSinceStartup;
+                if (process == null) { _charaAt = -1000; _charaSince = -1; _charaPressed = false; _charaStateLogged = -1; return false; }
                 if (_charaSince < 0)
                 {
-                    _charaSince = now;
+                    _charaSince = Time.realtimeSinceStartup;
                     _charaPressed = false;
-                    Log.Info("[nav] 旅行伙伴选择页出现: state=" + state + "（等画面展开 ~1.5s 再按決定）");
+                    Log.Info("[nav] 旅行伙伴选择页出现（不按键，交给游戏/玩家，最多等 10s）");
                 }
-                if (state != _charaStateLogged)
-                {
-                    _charaStateLogged = state;
-                    Log.Info("[nav] 旅行伙伴选择页: state=" + state);
-                }
-                // 原版会先展示角色/给出选择动画；至少等 1.5s，避免画面刚出现就被按掉（看起来像被跳过）。
-                if (!_charaPressed && now - _charaSince >= 1.5)
+                double now = Time.realtimeSinceStartup;
+                // 原版这一屏有 FirstInformation/SlotView/CharacterSelect 等动画，至少展示 10 秒；
+                // 期间不注入，让玩家自己选；10 秒后游戏仍未走再按一次決定。
+                if (!_charaPressed && now - _charaSince >= 10.0)
                 {
                     _charaPressed = true;
                     _charaAt = now;
                     InputInject.Press(monitor, Manager.InputManager.ButtonSetting.Button04);
-                    Log.Info("[nav] 旅行伙伴选择页: 按 4 号键決定（已展示 " + (now - _charaSince).ToString("0.0") + "s）");
+                    Log.Info("[nav] 旅行伙伴选择页: 10s 未进入下一屏 → 按 4 号键決定");
                     return true;
                 }
-                // 按过但 4s 没离开：再按一次
                 if (_charaPressed && now - _charaAt >= 4.0)
                 {
                     _charaAt = now;
                     InputInject.Press(monitor, Manager.InputManager.ButtonSetting.Button04);
-                    Log.Info("[nav] 旅行伙伴选择页: 重按 4 号键決定 state=" + state);
+                    Log.Info("[nav] 旅行伙伴选择页: 重按 4 号键");
                 }
                 return true;
             }

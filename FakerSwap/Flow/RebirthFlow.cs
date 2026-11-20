@@ -715,13 +715,13 @@ namespace FakerSwap.Flow
                 if (pending != null && pending.Count > 0)
                 {
                     for (int i = 0; i < areas.Count; i++)
-                        if (areas[i] != null && areas[i].Id == pending[0]) return areas[i].Index;
+                        if (areas[i] != null && areas[i].Id == pending[0] && !_crawlDone.Contains(areas[i].Id)) return areas[i].Index;
                 }
 
                 for (int i = 0; i < areas.Count; i++)
                 {
                     var a = areas[i];
-                    if (a == null || a.IsLock || a.IsInfinity || a.IsComplete) continue;
+                    if (a == null || a.IsLock || a.IsInfinity || a.IsComplete || _crawlDone.Contains(a.Id)) continue;   // 先选没跑过的区
                     return a.Index;
                 }
                 return -1;
