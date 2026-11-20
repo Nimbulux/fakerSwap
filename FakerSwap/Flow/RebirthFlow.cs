@@ -2256,6 +2256,13 @@ namespace FakerSwap.Flow
 
         private static void TickTransfer()
         {
+            // 用户在续关「是/否」屏按「否」= 手动中止（我们从不在续关屏注入 5 号键）。
+            if ((HasContinueProcess() || GameStagePump.Stage == GameStage.Continue) && Navigation.UserPressedNo())
+            {
+                Log.Warn("[flow] 检测到续关屏按「否」 → 按用户手动中止处理");
+                Abort();
+                return;
+            }
             if (!ProcessHooks.Ready)
             {
                 StatusText = "等待游戏进程…";

@@ -2732,6 +2732,18 @@ namespace FakerSwap.Flow
             return false;
         }
 
+
+        /// <summary>用户在续关「是/否」屏按了「否」（5 号键）。我们从不注入 5 号键，所以一定是真人。*</summary>
+        public static bool UserPressedNo()
+        {
+            try
+            {
+                if (Manager.InputManager.GetButtonDown(0, Manager.InputManager.ButtonSetting.Button05)) return true;
+                if (Manager.InputManager.GetButtonDown(1, Manager.InputManager.ButtonSetting.Button05)) return true;
+            }
+            catch (Exception) { }
+            return false;
+        }
         /// <summary>
         /// 需要选择的界面调用：返回 true = 现在不要注入（等待 3s / 用户已接管）。
         /// key 用「界面名:monitor」，界面切换后重新计时。
