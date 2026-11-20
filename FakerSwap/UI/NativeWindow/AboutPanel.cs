@@ -177,7 +177,12 @@ namespace FakerSwap.UI.NativeWindow
 
             if (_unlocked)
             {
-                c.Text("神秘菜单已解锁", x + c.S(10), y, width - c.S(230), boxH, Theme.Warn, false, true);
+                c.Text("神秘菜单已解锁", x + c.S(10), y, width - c.S(250), boxH, Theme.Warn, false, true);
+                if (c.Button("重锁", x + width - c.S(226), y + c.S(4), c.S(56), c.S(26), false))
+                {
+                    ResetSpin();
+                    _unlocked = false;
+                }
                 if (c.Button("进入神秘菜单 →", x + width - c.S(160), y + c.S(4), c.S(150), c.S(26), true))
                     OpenSecret();
             }
@@ -592,19 +597,7 @@ namespace FakerSwap.UI.NativeWindow
             if (row == null) return false;
             if (_songFilter == 1 && row.BaseInList) return false;
             if (_songFilter == 2 && !row.BaseInList) return false;
-            string query = _songSearch;
-            if (string.IsNullOrEmpty(query)) return true;
-            query = query.Trim();
-            if (query.Length == 0) return true;
-            if (query[0] == '#')
-            {
-                int id;
-                return int.TryParse(query.Substring(1), NumberStyles.Integer, CultureInfo.InvariantCulture, out id) && row.Id == id;
-            }
-            if (row.Title.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            if (row.Artist.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0) return true;
-            int parsed;
-            return int.TryParse(query, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) && row.Id == parsed;
+            return TextMatch.Matches(_songSearch, row.Id, row.Title, row.Artist);
         }
 
         private static int CountInList(GameCatalog.SongRow[] songs, int kind)

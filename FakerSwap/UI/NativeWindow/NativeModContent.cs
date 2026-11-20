@@ -21,7 +21,9 @@ namespace FakerSwap.UI.NativeWindow
         private static bool _unlockDialog;
 
         // area crawl panel (window-thread local UI state; committed to ConfigData via MainThread)
-        private static bool _areaExpanded = true;
+        private static bool _areaExpanded = false;
+        private static string _areaSearch = "";
+        private const int AreaSearchId = 9202;
         private static readonly HashSet<int> _areaSel = new HashSet<int>();
         private static bool _areaSelDirty;
         private static int _areaSelSentAt;
@@ -30,7 +32,7 @@ namespace FakerSwap.UI.NativeWindow
         private static int _areaFallbackSentAt;
 
         // settings panel (window-thread local UI state)
-        private static bool _settingsExpanded = true;
+        private static bool _settingsExpanded = false;
         private static string _fillerText = "";
         private static string _areaTimeoutText = "";
         private static int _openDropdownField;
@@ -51,12 +53,13 @@ namespace FakerSwap.UI.NativeWindow
             _toastUntil = 0;
             _lastSourceVersion = -1;
             _unlockDialog = false;
-            _areaExpanded = true;
+            _areaExpanded = false;
+            _areaSearch = "";
             _areaSel.Clear();
             _areaSelDirty = false;
             _areaFallback = false;
             _areaFallbackDirty = false;
-            _settingsExpanded = true;
+            _settingsExpanded = false;
             _fillerText = "";
             _areaTimeoutText = "";
             _openDropdownField = 0;
@@ -518,11 +521,22 @@ namespace FakerSwap.UI.NativeWindow
                 return y + emptyH + c.S(8);
             }
 
+            // search: id / name / fuzzy (e.g. "104", "#5500", "天界")
+            int searchW = Math.Min(width / 2, c.S(320));
+            _areaSearch = c.TextField(_areaSearch, AreaSearchId, x, y, searchW, c.S(26));
+            if (c.Button("清空", x + searchW + gap, y, c.S(56), c.S(26))) _areaSearch = "";
+            int matchCount = CountMatchingAreas(areas);
+            c.TextSmall("id / 名称 / 模糊搜索   ·   匹配 " + matchCount + " / " + areas.Length,
+                x + searchW + c.S(64) + gap, y, Math.Max(0, width - searchW - c.S(64) - gap), c.S(26), Theme.Muted);
+            y += c.S(30);
+
             int rowH = c.S(28);
+            int drawnRows = 0;
             for (int i = 0; i < areas.Length; i++)
             {
                 var area = areas[i];
-                if (area == null) continue;
+                if (area == null || !AreaMatches(area)) continue;
+                drawnRows++;
                 bool selected = _areaSel.Contains(area.Id);
                 bool hover = c.HoverAt(x, y, width, rowH);
                 c.Fill(x, y, width, rowH,
@@ -556,8 +570,26 @@ namespace FakerSwap.UI.NativeWindow
                 }
                 y += rowH;
             }
+            if (drawnRows == 0)
+            {
+                c.TextSmall("没有匹配的区域（试试清空搜索）", x, y, width, c.S(22), Theme.Muted);
+                y += c.S(24);
+            }
             y += c.S(6);
             return y;
+        }
+
+        private static bool AreaMatches(AreaEntry area)
+        {
+            return area != null && TextMatch.Matches(_areaSearch, area.Id, area.Name, "");
+        }
+
+        private static int CountMatchingAreas(AreaEntry[] areas)
+        {
+            int count = 0;
+            for (int i = 0; i < areas.Length; i++)
+                if (AreaMatches(areas[i])) count++;
+            return count;
         }
 
         /// <summary>Loaded-source card.  <paramref name="compact"/> is used by the single-column
