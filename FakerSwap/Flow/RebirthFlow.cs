@@ -2770,9 +2770,10 @@ namespace FakerSwap.Flow
             {
                 int musicId = slot.Item.MusicId;
                 int level = slot.Item.Level;
-                if (!ChartCatalog.IsDifficultyUnlocked(musicId, level) || !ChartCatalog.IsChartUnlocked(musicId, level))
+                if (!ChartCatalog.IsDifficultyUnlocked(musicId, level) || !ChartCatalog.IsChartUnlocked(musicId, level) ||
+                    !Navigation.IsChartSelectable(musicId, level))
                 {
-                    Log.Warn("[flow] 曲目 " + musicId + "-" + level + " 对该账号锁定（难度/曲目未解锁）→ 本轨改用 filler 占位继续");
+                    Log.Warn("[flow] 曲目 " + musicId + "-" + level + " 对该账号锁定/不可选 → 本轨改用 filler 占位继续");
                     ReplaceSlotWithFiller(slot);
                     SetCStep(Step.BatchSelect, "锁定曲 → 换 filler");
                     return;

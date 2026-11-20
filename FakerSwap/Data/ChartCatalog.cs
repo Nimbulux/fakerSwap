@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Xml;
 using FakerSwap.Core;
@@ -133,6 +134,9 @@ namespace FakerSwap.Data
         /// MASTER/Re:MASTER of event-locked songs return false here even though the chart exists;
         /// selecting such a chart in the song list just does nothing and the flow would spin on the
         /// difficulty screen until the 25s selection timeout.
+        ///
+        /// NOTE: the running game build differs from Libs/Assembly-CSharp.dll, so the method must be
+        /// found and invoked **via reflection** (a direct call threw MissingMethodException).
         /// </summary>
         public static bool IsDifficultyUnlocked(int musicId, int level)
         {
@@ -141,20 +145,43 @@ namespace FakerSwap.Data
             {
                 var nlm = MAI2.Util.Singleton<Manager.NotesListManager>.Instance;
                 if (nlm == null) return true;
-                if (level == 3) return nlm.IsUnlockMaster(musicId, 0);
-                if (level == 4) return nlm.IsUnlockReMaster(musicId, 0);
+                string name = level == 4 ? "IsUnlockReMaster" : "IsUnlockMaster";
+                var method = FindInstanceMethod(nlm.GetType(), name);
+                if (method == null) return true;   // build without that method -> do not filter
+                var ps = method.GetParameters();
+                if (ps.Length != 2) return true;
+                object arg2 = ps[1].ParameterType.IsEnum
+                    ? Enum.ToObject(ps[1].ParameterType, 0)
+                    : (object)0;
+                object result = method.Invoke(method.IsStatic ? null : (object)nlm, new object[] { musicId, arg2 });
+                return result is bool ? (bool)result : true;
             }
             catch (Exception e)
             {
-                if (WarnedSongs.Add(-musicId)) Log.Warn("ChartCatalog.IsDifficultyUnlocked(" + musicId + "," + level + ") failed: " + e.Message);
+                if (WarnedSongs.Add(-musicId))
+                    Log.Warn("ChartCatalog.IsDifficultyUnlocked(" + musicId + "," + level + ") failed: " +
+                             e.GetType().Name + ": " + e.Message);
             }
             return true;
         }
 
+        private static MethodInfo FindInstanceMethod(System.Type type, string name)
+        {
+            try
+            {
+                var methods = type.GetMethods(BindingFlags.Public | BindingFlags.NonPublic |
+                                              BindingFlags.Instance | BindingFlags.Static);
+                for (int i = 0; i < methods.Length; i++)
+                    if (methods[i].Name == name) return methods[i];
+            }
+            catch (Exception) { }
+            return null;
+        }
+
         /// <summary>
         /// Song-level lock check via the game's NotesWrapper (IsNeedUnlock / IsUnlock), read through
-        /// reflection so a build without those members simply skips the filter.  Returns true when
-        /// unsure - we never want to drop a playable chart.
+        /// reflection only (no compile-time NotesWrapper reference) so a build without those members
+        /// simply skips the filter.  Returns true when unsure - we never drop a playable chart.
         /// </summary>
         public static bool IsChartUnlocked(int musicId, int level)
         {
@@ -162,10 +189,13 @@ namespace FakerSwap.Data
             {
                 var nlm = MAI2.Util.Singleton<Manager.NotesListManager>.Instance;
                 if (nlm == null) return true;
-                var list = nlm.GetNotesList();
-                if (list == null) return true;
-                Manager.NotesWrapper wrapper;
-                if (!list.TryGetValue(musicId, out wrapper) || wrapper == null) return true;
+                var listMethod = FindInstanceMethod(nlm.GetType(), "GetNotesList");
+                if (listMethod == null || listMethod.GetParameters().Length != 0) return true;
+                object list = listMethod.Invoke(listMethod.IsStatic ? null : (object)nlm, null);
+                var dict = list as System.Collections.IDictionary;
+                if (dict == null) return true;
+                object wrapper = dict[musicId];
+                if (wrapper == null) return true;
 
                 var type = wrapper.GetType();
                 bool need = false;

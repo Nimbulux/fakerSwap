@@ -86,6 +86,7 @@ namespace FakerSwap.Data
                 if (r == null) continue;
                 if (r.Level < minLevel || r.Level > maxLevel) { res.OutOfRange.Add(r); continue; }
                 if (!ChartCatalog.Exists(r.MusicId, r.Level)) { res.Missing.Add(r); continue; }
+                if (IsMusicSkipped(r.MusicId)) { res.Locked.Add(r); continue; }
                 // 难度/曲目对当前账号是锁的（活动曲等）：选歌页会卡在难度页直到 25s 超时，
                 // 必须在计划阶段就剔除（下次跑区/转生才会跳过这些曲）。
                 if (!ChartCatalog.IsDifficultyUnlocked(r.MusicId, r.Level) ||
@@ -129,6 +130,20 @@ namespace FakerSwap.Data
 
             Log.Info("plan: " + res + (existing.Count > 0 ? " (target records=" + existing.Count + ")" : ""));
             return res;
+        }
+
+        /// <summary>True when the operator blacklisted this song in config (SkipMusicIds).</summary>
+        private static bool IsMusicSkipped(int musicId)
+        {
+            try
+            {
+                var list = ModConfig.Data.SkipMusicIds;
+                if (list == null) return false;
+                for (int i = 0; i < list.Count; i++)
+                    if (list[i] == musicId) return true;
+            }
+            catch (Exception) { }
+            return false;
         }
 
         /// <summary>

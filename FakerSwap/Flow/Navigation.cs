@@ -142,6 +142,50 @@ namespace FakerSwap.Flow
         {
             get { return _musicSubStateAt < -999 ? -1 : Time.realtimeSinceStartup - _musicSubStateAt; }
         }
+
+        /// <summary>
+        /// 选歌页里这首谱面到底能不能选（读游戏自己构建的 CombineMusicDataList 的 isEnable）。
+        /// 数据里存在但当前账号/版本禁用的难度，选了会卡在难度页（実机 70-4）；
+        /// 拿不准时返回 true，宁可放行也不误杀。
+        /// </summary>
+        public static bool IsChartSelectable(int musicId, int level)
+        {
+            try
+            {
+                var msp = NavProcess.Find<MusicSelectProcess>();
+                if (msp == null) return true;
+                var lists = msp.CombineMusicDataList;
+                if (lists == null) return true;
+                int scoreKind = musicId >= 10000 ? 1 : 0;
+                for (int c = 0; c < lists.Count; c++)
+                {
+                    var column = lists[c];
+                    if (column == null) continue;
+                    for (int i = 0; i < column.Count; i++)
+                    {
+                        var entry = column[i];
+                        if (entry == null) continue;
+                        var data = entry.musicSelectData;
+                        if (data == null || data.Count == 0) continue;
+                        int sk = scoreKind < data.Count ? scoreKind : 0;
+                        var sd = data[sk];
+                        if (sd == null || sd.MusicData == null) continue;
+                        if (sd.MusicData.GetID() != musicId) continue;
+                        var enabled = sd.isEnable;
+                        if (enabled == null || level < 0 || level >= enabled.Count) return true;
+                        if (!enabled[level])
+                        {
+                            NavReflect.WarnOnce("notselectable:" + musicId + "-" + level,
+                                "[nav] 谱面 " + musicId + "-" + level + " 在选歌页不可选（isEnable=false）→ 跳过");
+                            return false;
+                        }
+                        return true;
+                    }
+                }
+            }
+            catch (Exception) { }
+            return true;
+        }
         private static string _selectDiagKey;
 
         // StartCurrentSelection

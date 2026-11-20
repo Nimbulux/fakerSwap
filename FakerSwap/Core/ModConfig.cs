@@ -87,6 +87,9 @@ namespace FakerSwap.Core
         /// <summary>专用跑区模式最多跑多少个 credit（1 credit = 3 轨）后自动停。</summary>
         public int CrawlCreditLimit = 999;
 
+        /// <summary>这些 musicId 直接跳过不传（临时规避：某些谱面在选歌页选不出来，会拖死任务）。</summary>
+        public List<int> SkipMusicIds = new List<int>();
+
         /// <summary>自动刷卡（写 aime.txt + 回车）。默认 false：只停在登录页，等人工刷卡。</summary>
         public bool AutoSwipe = false;
         /// <summary>Areas the operator wants to crawl (empty = all / whatever the game offers).</summary>
@@ -218,6 +221,16 @@ namespace FakerSwap.Core
                 if (d.UnlockBatchRows > 1000) d.UnlockBatchRows = 1000;
                 d.CrawlCreditLimit = root["CrawlCreditLimit"].AsInt(d.CrawlCreditLimit);
                 if (d.CrawlCreditLimit < 1) d.CrawlCreditLimit = 1;
+                d.SkipMusicIds = new List<int>();
+                var skipArr = root["SkipMusicIds"];
+                if (skipArr.Kind == JsonKind.Array)
+                {
+                    for (int si = 0; si < skipArr.Count; si++)
+                    {
+                        int skipId = skipArr[si].AsInt(-1);
+                        if (skipId > 0) d.SkipMusicIds.Add(skipId);
+                    }
+                }
                 d.ManualAreaSelect = root["ManualAreaSelect"].AsBool(d.ManualAreaSelect);
                 d.TicketUseNext = root["TicketUseNext"].AsBool(d.TicketUseNext);
                 d.TicketUseKeep = root["TicketUseKeep"].AsBool(d.TicketUseKeep);
@@ -301,6 +314,10 @@ namespace FakerSwap.Core
                 o["FillerScoreEnable"] = JsonValue.Of(d.FillerScoreEnable);
                 o["UnlockBatchRows"] = JsonValue.Of(d.UnlockBatchRows);
                 o["CrawlCreditLimit"] = JsonValue.Of(d.CrawlCreditLimit);
+                var skipSave = JsonValue.NewArray();
+                if (d.SkipMusicIds != null)
+                    foreach (var skipId in d.SkipMusicIds) skipSave.Add(JsonValue.Of(skipId));
+                o["SkipMusicIds"] = skipSave;
                 o["ManualAreaSelect"] = JsonValue.Of(d.ManualAreaSelect);
                 o["TicketUseNext"] = JsonValue.Of(d.TicketUseNext);
                 o["TicketUseKeep"] = JsonValue.Of(d.TicketUseKeep);
