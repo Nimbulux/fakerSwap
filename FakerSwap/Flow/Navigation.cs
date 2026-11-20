@@ -131,6 +131,17 @@ namespace FakerSwap.Flow
         private static int _selCategory = -1;
         private static int _selIndex = -1;
         private static double _subPressAt = -100;
+        private static string _musicSubState = "";
+        private static double _musicSubStateAt = -1000;
+
+        /// <summary>当前选歌子状态（Genre/Music/Difficulty/Menu…），供 flow 诊断卡屏。</summary>
+        public static string MusicSubState { get { return _musicSubState; } }
+
+        /// <summary>当前选歌子状态已经持续多少秒（&lt;0 = 未知）。</summary>
+        public static double MusicSubStateAge
+        {
+            get { return _musicSubStateAt < -999 ? -1 : Time.realtimeSinceStartup - _musicSubStateAt; }
+        }
         private static string _selectDiagKey;
 
         // StartCurrentSelection
@@ -5338,6 +5349,11 @@ namespace FakerSwap.Flow
                 bool advancable = sub == "Genre" || sub == "Music" || sub == "Difficulty" ||
                                   sub == "Menu" || sub == "Option" || sub == "Character" ||
                                   sub == "SortSetting";
+                if (sub != _musicSubState)
+                {
+                    _musicSubState = sub;
+                    _musicSubStateAt = Time.realtimeSinceStartup;
+                }
                 if (!advancable) return false;
                 if (HoldForUser("music:" + player + ":" + sub, ModConfig.Data.UserHoldSec)) return true;
 

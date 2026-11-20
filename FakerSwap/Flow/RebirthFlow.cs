@@ -2763,13 +2763,57 @@ namespace FakerSwap.Flow
                 MarkTrackStarted();
                 return;
             }
+
+            // 曲目/难度对当前账号是锁的（活动曲等）：选歌页会卡在难度页直到超时，
+            // 直接把本轨换成 filler 继续，别让一顆雷毁掉整轮任务。
+            if (slot.Kind != SlotKind.Filler && slot.Item != null && slot.Item.Desired != null)
+            {
+                int musicId = slot.Item.MusicId;
+                int level = slot.Item.Level;
+                if (!ChartCatalog.IsDifficultyUnlocked(musicId, level) || !ChartCatalog.IsChartUnlocked(musicId, level))
+                {
+                    Log.Warn("[flow] 曲目 " + musicId + "-" + level + " 对该账号锁定（难度/曲目未解锁）→ 本轨改用 filler 占位继续");
+                    ReplaceSlotWithFiller(slot);
+                    SetCStep(Step.BatchSelect, "锁定曲 → 换 filler");
+                    return;
+                }
+            }
+
             if (Navigation.SelectChart(slot.Item.MusicId, slot.Item.Level))
             {
                 SetCStep(Step.BatchStart, "进入 " + slot.Item.MusicId + "-" + slot.Item.Level + " [" + tag + "]");
                 return;
             }
             StatusText = "选择 " + slot.Item.MusicId + "-" + slot.Item.Level + " [" + tag + "] …";
-            if (StepAge > 25) Fail("选曲超时 " + slot.Item.MusicId + "-" + slot.Item.Level);
+            if (StepAge > 25)
+            {
+                Log.Warn("[flow] 选曲超时诊断: music=" + slot.Item.MusicId + "-" + slot.Item.Level +
+                         " navSubState=" + (Navigation.MusicSubState ?? "?") +
+                         " subAge=" + Navigation.MusicSubStateAge.ToString("0.0") + "s" +
+                         " diffUnlocked=" + ChartCatalog.IsDifficultyUnlocked(slot.Item.MusicId, slot.Item.Level) +
+                         " chartUnlocked=" + ChartCatalog.IsChartUnlocked(slot.Item.MusicId, slot.Item.Level) +
+                         " stage=" + GameStagePump.Stage);
+                Fail("选曲超时 " + slot.Item.MusicId + "-" + slot.Item.Level);
+            }
+        }
+
+        /// <summary>把本轨换成 filler（性隐 BASIC，默认 AP）——用于锁定曲/选不出来的曲的兜底。</summary>
+        private static void ReplaceSlotWithFiller(Slot slot)
+        {
+            if (slot == null) return;
+            var record = new ScoreRecord
+            {
+                MusicId = ModConfig.Data.FillerMusicId,
+                Level = ModConfig.Data.FillerLevel,
+                PlayCount = 1,
+                Achievement = Math.Max(ModConfig.Data.FillerAchievement, 1005000),
+                NoMiss = true
+            };
+            int index = slot.Item != null ? slot.Item.Index : -1;
+            slot.Kind = SlotKind.Filler;
+            slot.Item = new TransferItem { Desired = record, Index = index, SkipReason = "replaced" };
+            try { ScoreHooks.BeginFiller(); } catch (Exception) { }
+            Log.Info("[flow] 槽位改用 filler: " + record.MusicId + "-" + record.Level);
         }
 
         private static void TickStart()

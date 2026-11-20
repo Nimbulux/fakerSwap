@@ -9,6 +9,8 @@ namespace FakerSwap.Data
         public List<TransferItem> Items = new List<TransferItem>();
         /// <summary>Records dropped because this game build does not contain the chart.</summary>
         public List<ScoreRecord> Missing = new List<ScoreRecord>();
+        /// <summary>Records dropped because the target account has the difficulty locked (event song etc.).</summary>
+        public List<ScoreRecord> Locked = new List<ScoreRecord>();
         /// <summary>Records dropped because they were outside the difficulty window.</summary>
         public List<ScoreRecord> OutOfRange = new List<ScoreRecord>();
         /// <summary>Records already present with the same or better achievement.</summary>
@@ -23,7 +25,8 @@ namespace FakerSwap.Data
         public override string ToString()
         {
             return "items=" + Items.Count + " source=" + SourceTotal + " missing=" + Missing.Count +
-                   " outOfRange=" + OutOfRange.Count + " alreadyDone=" + AlreadyDone.Count;
+                   " locked=" + Locked.Count + " outOfRange=" + OutOfRange.Count +
+                   " alreadyDone=" + AlreadyDone.Count;
         }
     }
 
@@ -83,6 +86,14 @@ namespace FakerSwap.Data
                 if (r == null) continue;
                 if (r.Level < minLevel || r.Level > maxLevel) { res.OutOfRange.Add(r); continue; }
                 if (!ChartCatalog.Exists(r.MusicId, r.Level)) { res.Missing.Add(r); continue; }
+                // 难度/曲目对当前账号是锁的（活动曲等）：选歌页会卡在难度页直到 25s 超时，
+                // 必须在计划阶段就剔除（下次跑区/转生才会跳过这些曲）。
+                if (!ChartCatalog.IsDifficultyUnlocked(r.MusicId, r.Level) ||
+                    !ChartCatalog.IsChartUnlocked(r.MusicId, r.Level))
+                {
+                    res.Locked.Add(r);
+                    continue;
+                }
 
                 ScoreRecord prev;
                 if (!bySong.TryGetValue(r.MusicId, out prev))

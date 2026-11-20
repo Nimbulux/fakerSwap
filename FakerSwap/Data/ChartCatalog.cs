@@ -128,6 +128,73 @@ namespace FakerSwap.Data
             }
         }
 
+        /// <summary>
+        /// The game's own "can this account play this difficulty" check (NotesListManager).
+        /// MASTER/Re:MASTER of event-locked songs return false here even though the chart exists;
+        /// selecting such a chart in the song list just does nothing and the flow would spin on the
+        /// difficulty screen until the 25s selection timeout.
+        /// </summary>
+        public static bool IsDifficultyUnlocked(int musicId, int level)
+        {
+            if (level <= 2) return true;   // BASIC/ADVANCED/EXPERT are always available
+            try
+            {
+                var nlm = MAI2.Util.Singleton<Manager.NotesListManager>.Instance;
+                if (nlm == null) return true;
+                if (level == 3) return nlm.IsUnlockMaster(musicId, 0);
+                if (level == 4) return nlm.IsUnlockReMaster(musicId, 0);
+            }
+            catch (Exception e)
+            {
+                if (WarnedSongs.Add(-musicId)) Log.Warn("ChartCatalog.IsDifficultyUnlocked(" + musicId + "," + level + ") failed: " + e.Message);
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Song-level lock check via the game's NotesWrapper (IsNeedUnlock / IsUnlock), read through
+        /// reflection so a build without those members simply skips the filter.  Returns true when
+        /// unsure - we never want to drop a playable chart.
+        /// </summary>
+        public static bool IsChartUnlocked(int musicId, int level)
+        {
+            try
+            {
+                var nlm = MAI2.Util.Singleton<Manager.NotesListManager>.Instance;
+                if (nlm == null) return true;
+                var list = nlm.GetNotesList();
+                if (list == null) return true;
+                Manager.NotesWrapper wrapper;
+                if (!list.TryGetValue(musicId, out wrapper) || wrapper == null) return true;
+
+                var type = wrapper.GetType();
+                bool need = false;
+                var needProp = type.GetProperty("IsNeedUnlock");
+                if (needProp != null)
+                {
+                    var value = needProp.GetValue(wrapper, null);
+                    if (value is bool) need = (bool)value;
+                }
+                var unlockProp = type.GetProperty("IsUnlock");
+                if (unlockProp == null) return true;
+                var unlock = unlockProp.GetValue(wrapper, null);
+                if (unlock == null) return true;
+                var perLevel = unlock as bool[];
+                if (perLevel != null)
+                {
+                    if (level >= 0 && level < perLevel.Length) return perLevel[level];
+                    return true;
+                }
+                if (unlock is bool)
+                {
+                    bool value = (bool)unlock;
+                    return !need || value;   // 只有「需要解禁且未解禁」才判为不可玩
+                }
+            }
+            catch (Exception) { }
+            return true;
+        }
+
         /// <summary>Note statistics for one chart, or null when the chart does not exist.</summary>
         public static ChartStats GetStats(int musicId, int level)
         {
