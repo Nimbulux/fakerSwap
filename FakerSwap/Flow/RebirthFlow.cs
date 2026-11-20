@@ -310,6 +310,7 @@ namespace FakerSwap.Flow
                 CheckProcessPile();
                 CheckAreaProgress();
                 if (Navigation.IsTaskActive()) TickAreaSelection();
+                Navigation.HandlePassiveScreens();
                 if (Navigation.IsTaskActive()) Navigation.SkipPhotoShoot(_monitor >= 0 ? _monitor : 0);
                 if (Navigation.IsTaskActive() && TickClosingPages())
                 {
@@ -661,8 +662,8 @@ namespace FakerSwap.Flow
                 // nav 的 DriveRegionalSelect 会用真实按键把光标移过去再按決定。
                 if (MapHooks.SelectedAreaId <= 0)
                 {
-                    int cursor = PickCrawlCursor();
-                    if (cursor >= 0) Navigation.RequestSelectArea(cursor);
+                    int areaId = PickCrawlAreaId();
+                    if (areaId > 0) Navigation.RequestSelectAreaId(areaId);   // 直接按 areaId 选，不移动光标
                 }
 
                 // 每帧都可调用（内部 0.25s 限速）：提示页/发现动画 → 4 号键推进；主页面 → 移动 + 決定
@@ -726,6 +727,39 @@ namespace FakerSwap.Flow
                     var a = areas[i];
                     if (a == null || a.IsLock || a.IsInfinity || a.IsComplete || _crawlDone.Contains(a.Id)) continue;   // 先选没跑过的区
                     return a.Index;
+                }
+                return -1;
+            }
+            catch (Exception) { return -1; }
+        }
+
+        /// <summary>下一个要跑的 areaId：跳过本次已跑过、已完成、锁定、无限区；按勾选列表/列表顺序。</summary>
+        private static int PickCrawlAreaId()
+        {
+            try
+            {
+                var areas = MapHooks.AvailableAreas;
+                if (areas == null || areas.Count == 0) return -1;
+                var wanted = ModConfig.Data.CrawlAreaIds;
+                if (wanted != null && wanted.Count > 0)
+                {
+                    for (int w = 0; w < wanted.Count; w++)
+                    {
+                        int id = wanted[w];
+                        if (_crawlDone.Contains(id)) continue;
+                        for (int i = 0; i < areas.Count; i++)
+                        {
+                            var a = areas[i];
+                            if (a == null || a.Id != id || a.IsLock || a.IsInfinity || a.IsComplete) continue;
+                            return a.Id;
+                        }
+                    }
+                }
+                for (int i = 0; i < areas.Count; i++)
+                {
+                    var a = areas[i];
+                    if (a == null || a.IsLock || a.IsInfinity || a.IsComplete || _crawlDone.Contains(a.Id)) continue;
+                    return a.Id;
                 }
                 return -1;
             }

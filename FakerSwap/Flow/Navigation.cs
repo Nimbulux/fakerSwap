@@ -3306,6 +3306,18 @@ namespace FakerSwap.Flow
         /// 插件任务是否正在运行：`MachineLock.Active` 或 `RebirthFlow.Phase` 处于登录/转生执行阶段。
         /// 供 Entry 自动推进、MapHooks 区域接管等后台钩子共用；用户自己玩时一律 false。
         /// </summary>
+        /// <summary>无论 flow 处于哪个 step，只要角色选择页在就按正常节奏处理（页面先展示，10s 后才按）。</summary>
+        public static void HandlePassiveScreens()
+        {
+            try
+            {
+                if (!NavProcess.HasName("Process.CharacterSelectProcess", "Process.CharacterSelectProces")) return;
+                if (!IsTaskActive()) return;
+                HandleCharacterSelect(0);
+            }
+            catch (Exception) { }
+        }
+
         public static bool IsTaskActive()
         {
             if (RebirthFlow.IsStoppingNow) return false;   // 中止中：不锁、不拦、不接管
