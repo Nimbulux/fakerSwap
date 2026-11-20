@@ -2324,6 +2324,10 @@ namespace FakerSwap.Flow
             PendingAreaCursor = cursorIndex;
         }
 
+        /// <summary>按 areaId 直接选（不移动光标）：3 秒无人操作后由 flow 指定。</summary>
+        public static int PendingAreaId = -1;
+        public static void RequestSelectAreaId(int areaId) { PendingAreaId = areaId; }
+
         private static double _areaDirectAt = -1000;
         private static double _areaDirectFirstAt = -1000;
         private static bool _areaDirectTimedUp;
@@ -2388,6 +2392,7 @@ namespace FakerSwap.Flow
                 // 主选择页：先移动光标到目标区，再按決定
                 // 主选择页：**直接改光标数组**跳到目标区（正式机台只有 30s，逐步按 3/6 根本走不完），
                 // 再按一次真实 4 号键走游戏自己的 CanVisitRegion→RegionSelectDecide 校验。
+                // 用户要求：3s 不动就直接按 areaId 选，不再用按键移动光标。                 if (PendingAreaId > 0)                 {                     try                     {                         var list = ListAreas(monitor);                         int idx = -1;                         for (int i = 0; i < list.Count; i++)                         {                             var a = list[i];                             if (a == null || a.Id != PendingAreaId) continue;                             idx = a.Index;                             break;                         }                         if (idx >= 0)                         {                             SetArrayInt(process, "_selectCursolIndex", monitor, idx);                             string err = null;                             NavReflect.TryCall(process, "RegionSelectDecide", new object[] { monitor }, out err);                             Log.Info("[nav] 选区: areaId=" + PendingAreaId + " idx=" + idx + " → RegionSelectDecide err=" + (err ?? "none"));                             if (err != null) NavReflect.TryCall(process, "Decide", new object[] { monitor }, out err);                             PendingAreaId = -1;                             _regionDriveAt = now;                             return 2;                         }                         PendingAreaId = -1;                     }                     catch (Exception e) { Log.Warn("[nav] areaId 直选失败: " + e.Message); PendingAreaId = -1; }                 } 
                 if (sub == 6)
                 {
                     int target = ResolveAreaCursor();
@@ -3303,6 +3308,7 @@ namespace FakerSwap.Flow
         /// </summary>
         public static bool IsTaskActive()
         {
+            if (RebirthFlow.IsStoppingNow) return false;   // 中止中：不锁、不拦、不接管
             try
             {
                 if (MachineLock.Active) return true;

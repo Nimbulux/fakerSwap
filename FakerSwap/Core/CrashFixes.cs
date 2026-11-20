@@ -385,8 +385,16 @@ namespace FakerSwap.Core
             [HarmonyLib.HarmonyPrefix]
             private static bool Prefix(ref bool __result)
             {
-                __result = false;
-                return false;   // 跳过原方法体
+                try
+                {
+                    if (FakerSwap.Flow.Navigation.IsTaskActive() && !FakerSwap.Flow.RebirthFlow.IsStoppingNow)
+                    {
+                        __result = false;
+                        return false;   // 任务中钉死 false，防 OnUpdate NRE
+                    }
+                }
+                catch (Exception) { }
+                return true;        // 空闲/中止中：放过原值，用户可手动跳过
             }
         }
 
@@ -447,6 +455,7 @@ namespace FakerSwap.Core
                 Log.Warn("CrashFixes: character list probe failed (" + e.GetType().Name +
                          ") - treating the account as having no characters");
             }
+            // 用 CharaList 装满 removeList，保证原版 AutoComposeCharacterSlot 能算出 5 个槽             if (usable && (removeList == null || removeList.Count == 0))             {                 try                 {                     var manager2 = MAI2.Util.Singleton<Manager.UserDataManager>.Instance;                     var ud2 = manager2 != null ? manager2.GetUserData(0) : null;                     var cl2 = ud2 != null ? ud2.CharaList : null;                     if (cl2 != null && removeList != null)                     {                         for (int i = 0; i < cl2.Count && i < 200; i++)                         {                             var c2 = cl2[i];                             if (c2 != null && c2.ID > 0) removeList.Add(c2);                         }                     }                 }                 catch (Exception) { }             }
             if (usable) return true;
 
             // Never fall back to the vanilla method here: with an unusable list it throws
@@ -476,12 +485,31 @@ namespace FakerSwap.Core
 
         private static bool HasUsableChara(List<UserChara> list)
         {
-            if (list == null) return false;
-            for (int i = 0; i < list.Count; i++)
+            if (list != null)
             {
-                var c = list[i];
-                if (c != null && c.ID > 0) return true;
+                for (int i = 0; i < list.Count; i++)
+                {
+                    var c = list[i];
+                    if (c != null && c.ID > 0) return true;
+                }
             }
+            // removeList 可能只是「本次可移除列表」，账号真实角色在 UserData.CharaList；
+            // 国服 1.55 实测 removeList 为空，但账号明明有旅行伙伴 → 不能用它判断「没有角色」。
+            try
+            {
+                var manager = MAI2.Util.Singleton<Manager.UserDataManager>.Instance;
+                var userData = manager != null ? manager.GetUserData(0) : null;
+                var charaList = userData != null ? userData.CharaList : null;
+                if (charaList != null)
+                {
+                    for (int i = 0; i < charaList.Count; i++)
+                    {
+                        var c = charaList[i];
+                        if (c != null && c.ID > 0) return true;
+                    }
+                }
+            }
+            catch (Exception) { }
             return false;
         }
 

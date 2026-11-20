@@ -1382,6 +1382,12 @@ namespace FakerSwap.Flow
         /// <summary>Release the ManualAreaSelect gate for the current area-select screen.</summary>
         public static void ConfirmAreaSelect() { _areaConfirmed = true; Log.Warn("flow: 选区已人工确认 → 进入区域"); }
 
+        /// <summary>正在中止/收尾：此时不再锁输入、不再拦截游戏的跳过操作。</summary>
+        public static bool IsStoppingNow
+        {
+            get { return _stopping || Phase == FlowPhase.Stopping; }
+        }
+
         public static void Abort()
         {
             if (!IsBusy)
@@ -1404,6 +1410,7 @@ namespace FakerSwap.Flow
             }
             Log.Info("flow: abort requested in phase " + Phase + " (credit=" + CurrentCredit + " track=" + CurrentTrack + ")");
             _stopping = true;
+            try { MachineLock.Off(); } catch (Exception) { }   // 中止瞬间立即释放输入锁
             if (_abortSlot >= 0)
             {
                 // 重复中止（界面连点 / 命令重放）：中止槽位已经处理过，再走一遍会覆盖成占位曲，
@@ -3658,6 +3665,7 @@ namespace FakerSwap.Flow
 
         private static void SyncMachineLock()
         {
+            if (IsStoppingNow) { if (MachineLock.Active) MachineLock.Off(); return; }
             if (Navigation.UserHoldActive)
             {
                 if (MachineLock.Active) MachineLock.Off();
