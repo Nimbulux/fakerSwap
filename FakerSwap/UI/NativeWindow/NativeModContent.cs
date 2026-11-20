@@ -25,6 +25,8 @@ namespace FakerSwap.UI.NativeWindow
         private static string _areaSearch = "";
         private const int AreaSearchId = 9202;
         private static readonly HashSet<int> _areaSel = new HashSet<int>();
+        /// <summary>Area ids in the order they are displayed this frame (used to keep CrawlAreaIds ordered).</summary>
+        private static readonly List<int> _areaOrder = new List<int>();
         private static bool _areaSelDirty;
         private static int _areaSelSentAt;
         private static bool _areaFallback;
@@ -420,10 +422,19 @@ namespace FakerSwap.UI.NativeWindow
 
         private static int[] AreaSelectionArray()
         {
-            var array = new int[_areaSel.Count];
-            _areaSel.CopyTo(array);
-            Array.Sort(array);
-            return array;
+            // Preserve the display order the operator sees (CrawlAreaIds 的顺序就是跑区顺序)。
+            var result = new List<int>(_areaSel.Count);
+            for (int i = 0; i < _areaOrder.Count; i++)
+            {
+                int id = _areaOrder[i];
+                if (!_areaSel.Contains(id) || result.Contains(id)) continue;
+                result.Add(id);
+            }
+            foreach (int id in _areaSel)
+            {
+                if (!result.Contains(id)) result.Add(id);
+            }
+            return result.ToArray();
         }
 
         private static void CommitAreaSelection()
@@ -469,6 +480,7 @@ namespace FakerSwap.UI.NativeWindow
             c.Text("区域（爬图）", x + c.S(8), y, c.S(110), headerH, Theme.Accent, false, true);
 
             string summary = "已选 " + _areaSel.Count + " / " + (s.Areas != null ? s.Areas.Length : 0) +
+                             "   ·   本轮已跑 " + s.CrawlDoneCount +
                              "   ·   完成 " + s.CrawlCompletedCount;
             c.TextSmall(summary, x + c.S(116), y + c.S(7), width - c.S(300), c.S(18), Theme.Muted);
 
@@ -512,11 +524,16 @@ namespace FakerSwap.UI.NativeWindow
             y += c.S(30);
 
             int gap = c.S(6);
-            int rowW = (width - gap * 3) / 4;
+            int rowW = (width - gap * 4) / 5;
             if (c.Button("全选", x, y, rowW, c.S(26))) SelectAllAreas(s, true);
-            if (c.Button("全不选", x + rowW + gap, y, rowW, c.S(26))) SelectAllAreas(s, false);
+            if (c.Button("全不选", x + (rowW + gap), y, rowW, c.S(26))) SelectAllAreas(s, false);
             if (c.Button("仅未完成", x + (rowW + gap) * 2, y, rowW, c.S(26))) SelectIncompleteAreas(s);
             if (c.Button("刷新列表", x + (rowW + gap) * 3, y, rowW, c.S(26))) UiActions.RefreshAreas();
+            if (c.Button("清空已跑", x + (rowW + gap) * 4, y, rowW, c.S(26)))
+            {
+                UiActions.ClearCrawlDone();
+                Toast("已清空「本轮已跑」记录");
+            }
             y += c.S(30);
 
             bool newFallback = c.Toggle(_areaFallback, "爬完所有勾选区后，从头再来继续爬", x, y, width, c.CtrlH);
@@ -552,11 +569,14 @@ namespace FakerSwap.UI.NativeWindow
             y += c.S(30);
 
             int rowH = c.S(28);
+            _areaOrder.Clear();
             int drawnRows = 0;
             for (int i = 0; i < areas.Length; i++)
             {
                 var area = areas[i];
-                if (area == null || !AreaMatches(area)) continue;
+                if (area == null) continue;
+                _areaOrder.Add(area.Id);
+                if (!AreaMatches(area)) continue;
                 drawnRows++;
                 bool selected = _areaSel.Contains(area.Id);
                 bool hover = c.HoverAt(x, y, width, rowH);

@@ -733,7 +733,8 @@ namespace FakerSwap.Flow
             catch (Exception) { return -1; }
         }
 
-        /// <summary>下一个要跑的 areaId：跳过本次已跑过、已完成、锁定、无限区；按勾选列表/列表顺序。</summary>
+        /// <summary>下一个要跑的 areaId：按勾选列表顺序；跳过本轮已跑、已完成、锁定、无限区。
+        /// 全部跑完且 CrawlAllAreasFallback=true 时清空本轮记录、开新一轮。</summary>
         private static int PickCrawlAreaId()
         {
             try
@@ -741,20 +742,26 @@ namespace FakerSwap.Flow
                 var areas = MapHooks.AvailableAreas;
                 if (areas == null || areas.Count == 0) return -1;
                 var wanted = ModConfig.Data.CrawlAreaIds;
+                int picked = PickFromWanted(wanted, areas);
+                if (picked > 0) return picked;
+
+                // 勾选的区都跑过了：按配置决定「下一轮」还是「找运行时列表里剩下的未完成区」。
                 if (wanted != null && wanted.Count > 0)
                 {
-                    for (int w = 0; w < wanted.Count; w++)
+                    if (ModConfig.Data.CrawlAllAreasFallback && HasIncompleteArea(areas))
                     {
-                        int id = wanted[w];
-                        if (_crawlDone.Contains(id)) continue;
-                        for (int i = 0; i < areas.Count; i++)
-                        {
-                            var a = areas[i];
-                            if (a == null || a.Id != id || a.IsLock || a.IsInfinity || a.IsComplete) continue;
-                            return a.Id;
-                        }
+                        _crawlRound++;
+                        _crawlDone.Clear();
+                        CrawlState.Save(_crawlDone, _crawlRound, wanted);
+                        Log.Info("[crawl] 勾选区已跑完一轮 → 开始第 " + _crawlRound + " 轮（清空本轮记录）");
+                        picked = PickFromWanted(wanted, areas);
+                        if (picked > 0) return picked;
                     }
+                    // 勾选的区全完成/全锁：不再乱跑别的区，交由上层结束
+                    Log.Info("[crawl] 勾选的区域已全部跑完或不可跑（轮次=" + _crawlRound + "）");
+                    return -1;
                 }
+
                 for (int i = 0; i < areas.Count; i++)
                 {
                     var a = areas[i];
@@ -764,6 +771,57 @@ namespace FakerSwap.Flow
                 return -1;
             }
             catch (Exception) { return -1; }
+        }
+
+        private static int PickFromWanted(List<int> wanted, List<Navigation.AreaInfo> areas)
+        {
+            if (wanted == null || wanted.Count == 0) return -1;
+            var skipped = new System.Text.StringBuilder();
+            for (int w = 0; w < wanted.Count; w++)
+            {
+                int id = wanted[w];
+                if (_crawlDone.Contains(id)) { skipped.Append(id).Append(":已跑 "); continue; }
+                bool found = false;
+                for (int i = 0; i < areas.Count; i++)
+                {
+                    var a = areas[i];
+                    if (a == null || a.Id != id) continue;
+                    found = true;
+                    if (a.IsLock) { skipped.Append(id).Append(":锁定 "); break; }
+                    if (a.IsInfinity) { skipped.Append(id).Append(":无限 "); break; }
+                    if (a.IsComplete) { skipped.Append(id).Append(":已完成 "); break; }
+                    if (skipped.Length > 0)
+                    {
+                        LogCrawlSkip(skipped.ToString());
+                    }
+                    return a.Id;
+                }
+                if (!found) skipped.Append(id).Append(":列表里没有 ");
+            }
+            if (skipped.Length > 0) LogCrawlSkip(skipped.ToString());
+            return -1;
+        }
+
+        private static double _crawlSkipLogAt = -1000;
+
+        /// <summary>选区跳过原因（节流：同一屏只打一条，便于排查「为什么不按列表跑」）。</summary>
+        private static void LogCrawlSkip(string text)
+        {
+            double now = UnityEngine.Time.realtimeSinceStartup;
+            if (now - _crawlSkipLogAt < 2.5) return;
+            _crawlSkipLogAt = now;
+            Log.Info("[crawl] 选区跳过（按勾选顺序检查）: " + text);
+        }
+
+        private static bool HasIncompleteArea(List<Navigation.AreaInfo> areas)
+        {
+            for (int i = 0; i < areas.Count; i++)
+            {
+                var a = areas[i];
+                if (a == null || a.IsLock || a.IsInfinity || a.IsComplete) continue;
+                return true;
+            }
+            return false;
         }
 
         // ---- area crawl loop ----
@@ -793,6 +851,9 @@ namespace FakerSwap.Flow
                 {
                     _crawlLastAreaId = areaId;
                     _crawlDone.Add(areaId);
+                    // 落盘：重启后仍记得这个区本轮跑过（否则每次重启都从头重跑）。
+                    CrawlState.Save(_crawlDone, _crawlRound, ModConfig.Data.CrawlAreaIds);
+                    try { AreaCatalog.MarkStale(); } catch (Exception) { }
                     Log.Info("[flow] 选区: areaId=" + areaId + " name=" + areaName + " 进度=" +
                              _crawlDone.Count + (planned > 0 ? "/" + planned : "/?") +
                              " 剩余倒计时=" + ModConfig.Data.AreaSelectTimeoutSec.ToString("0.0") + "s" +
@@ -1373,6 +1434,10 @@ namespace FakerSwap.Flow
             }
             _crawlOnly = false;
             Plan = null;
+            _crawlDone.Clear();
+            _crawlRound = 1;
+            try { CrawlState.Load(_crawlDone, out _crawlRound, ModConfig.Data.CrawlAreaIds); }
+            catch (Exception) { }
             _loginWarned = false;
             _targetRecords = null;
             _targetRating = 0;
@@ -1395,6 +1460,19 @@ namespace FakerSwap.Flow
 
         /// <summary>True while the dedicated area-crawl mode owns the loop.</summary>
         public static bool CrawlOnly { get { return _crawlOnly; } }
+
+        /// <summary>How many areas were crawled this round (persisted to crawl-state.json).</summary>
+        public static int CrawlDoneCount { get { return _crawlDone.Count; } }
+
+        /// <summary>Forget the persisted "already crawled" set (UI button).</summary>
+        public static void ClearCrawlDone()
+        {
+            _crawlDone.Clear();
+            _crawlRound = 1;
+            _crawlLastAreaId = -1;
+            try { CrawlState.Clear(); } catch (Exception) { }
+            Log.Info("[crawl] 已清空本轮已跑区域记录");
+        }
 
         /// <summary>
         /// 专用跑区：不需要源数据。每个 credit 打 3 轨（性隐 BASIC 默认拉满 AP），
@@ -1438,6 +1516,8 @@ namespace FakerSwap.Flow
             _staleLogoutSent = false;
             _crawlDone.Clear();
             _crawlRound = 1;
+            try { CrawlState.Load(_crawlDone, out _crawlRound, ModConfig.Data.CrawlAreaIds); }
+            catch (Exception) { }
             _crawlLastAreaId = -1;
             _crawlFallbackDefault = false;
             _missionsPlayed = 0;
@@ -3154,6 +3234,7 @@ namespace FakerSwap.Flow
 
         private static void TickAfterCredit()
         {
+            try { AreaCatalog.MarkStale(); } catch (Exception) { }   // UI 进度随本 credit 更新
             if (_stopping)
             {
                 StartShutdown(false, "已中止", FlowPhase.Finished);

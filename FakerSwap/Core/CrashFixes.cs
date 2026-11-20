@@ -32,8 +32,9 @@ namespace FakerSwap.Core
                     return;
                 }
                 var prefix = new HarmonyMethod(typeof(CrashFixes).GetMethod(nameof(AutoComposeCharacterSlotPrefix)));
-                harmony.Patch(target, prefix: prefix);
-                Log.Info("CrashFixes: AutoComposeCharacterSlot guarded (empty character list -> synthesized slots)");
+                var finalizer = new HarmonyMethod(typeof(CrashFixes).GetMethod(nameof(AutoComposeCharacterSlotFinalizer)));
+                harmony.Patch(target, prefix: prefix, finalizer: finalizer);
+                Log.Info("CrashFixes: AutoComposeCharacterSlot guarded (accounts with characters keep the vanilla path)");
 
                 // Held-button injection (MODE SELECT 決定ボタン needs a long press, not an edge).
                 harmony.PatchAll(typeof(FakerSwap.Flow.ButtonHold.Patch));
@@ -455,7 +456,36 @@ namespace FakerSwap.Core
                 Log.Warn("CrashFixes: character list probe failed (" + e.GetType().Name +
                          ") - treating the account as having no characters");
             }
-            // 用 CharaList 装满 removeList，保证原版 AutoComposeCharacterSlot 能算出 5 个槽             if (usable && (removeList == null || removeList.Count == 0))             {                 try                 {                     var manager2 = MAI2.Util.Singleton<Manager.UserDataManager>.Instance;                     var ud2 = manager2 != null ? manager2.GetUserData(0) : null;                     var cl2 = ud2 != null ? ud2.CharaList : null;                     if (cl2 != null && removeList != null)                     {                         for (int i = 0; i < cl2.Count && i < 200; i++)                         {                             var c2 = cl2[i];                             if (c2 != null && c2.ID > 0) removeList.Add(c2);                         }                     }                 }                 catch (Exception) { }             }
+            // 账号真的有角色时必须走原版 AutoComposeCharacterSlot（否则游戏会认为伙伴已配好，
+            // 「旅行伙伴选择」界面就不再出现）。原版要求 removeList 非空，否则 InsertLockChara().First()
+            // 抛 "Sequence contains no matching element"，所以这里先把账号真实 CharaList 填进去。
+            if (usable && (removeList == null || removeList.Count == 0))
+            {
+                try
+                {
+                    var userData = GetUserDataSafe();
+                    var charaList = FakerSwap.Data.UserDataAccess.GetCharaList(userData);
+                    int filled = 0;
+                    if (charaList != null && removeList != null)
+                    {
+                        for (int i = 0; i < charaList.Count && i < 200; i++)
+                        {
+                            var chara = charaList[i];
+                            if (chara != null && chara.ID > 0)
+                            {
+                                removeList.Add(chara);
+                                filled++;
+                            }
+                        }
+                    }
+                    Log.Info("[chara] removeList 为空 -> 用账号 CharaList 填充 " + filled +
+                             " 个，交给原版组合伙伴槽");
+                }
+                catch (Exception e)
+                {
+                    Log.Warn("[chara] 填充 removeList 失败: " + e.Message);
+                }
+            }
             if (usable) return true;
 
             // Never fall back to the vanilla method here: with an unusable list it throws
@@ -483,34 +513,79 @@ namespace FakerSwap.Core
             }
         }
 
-        private static bool HasUsableChara(List<UserChara> list)
+        /// <summary>
+        /// Last-resort guard: if the vanilla AutoComposeCharacterSlot throws (e.g. removeList empty
+        /// on an account without characters), swallow the exception and return the synthesized
+        /// slots instead of letting the crash kill the game right after region select.
+        /// </summary>
+        public static Exception AutoComposeCharacterSlotFinalizer(Exception __exception, int leaderID,
+            ref UserChara[] __result)
         {
-            if (list != null)
+            if (__exception == null) return null;
+            Log.Warn("[chara] 原版 AutoComposeCharacterSlot 抛异常 (" + __exception.GetType().Name +
+                     ")，改用合成伙伴槽兜底: " + __exception.Message);
+            try
             {
-                for (int i = 0; i < list.Count; i++)
+                SynthesizeSlots(leaderID, ref __result);
+            }
+            catch (Exception e)
+            {
+                Log.Error("[chara] 合成伙伴槽也失败，返回空数组", e);
+                __result = new UserChara[0];
+            }
+            return null;   // 吞掉异常，游戏继续
+        }
+
+        private static void SynthesizeSlots(int leaderID, ref UserChara[] result)
+        {
+            int id = leaderID > 0 ? leaderID : FallbackCharaId;
+            var slots = new UserChara[5];
+            for (int i = 0; i < slots.Length; i++)
+            {
+                var chara = new UserChara();
+                chara.ID = id;
+                slots[i] = chara;
+            }
+            result = slots;
+            Log.Warn("CrashFixes: synthesized 5 slots with charaId=" + id);
+        }
+
+        private static bool HasUsableChara(List<UserChara> removeList)
+        {
+            if (removeList != null)
+            {
+                for (int i = 0; i < removeList.Count; i++)
                 {
-                    var c = list[i];
-                    if (c != null && c.ID > 0) return true;
+                    try
+                    {
+                        var c = removeList[i];
+                        if (c != null && c.ID > 0) return true;
+                    }
+                    catch (Exception) { }
                 }
             }
-            // removeList 可能只是「本次可移除列表」，账号真实角色在 UserData.CharaList；
-            // 国服 1.55 实测 removeList 为空，但账号明明有旅行伙伴 → 不能用它判断「没有角色」。
+            // removeList 可能只是「本次可移除列表」；账号真实角色在 UserData.CharaList / Detail.CharaSlot。
+            // 用字段反射读取，绕开任何被其它 Mod patch 过的 getter，且绝不让异常冒出去。
+            try
+            {
+                var userData = GetUserDataSafe();
+                if (userData != null && FakerSwap.Data.UserDataAccess.HasAnyCharacter(userData)) return true;
+            }
+            catch (Exception e)
+            {
+                Log.Warn("[chara] 账号角色探测失败: " + e.GetType().Name + ": " + e.Message);
+            }
+            return false;
+        }
+
+        private static Manager.UserData GetUserDataSafe()
+        {
             try
             {
                 var manager = MAI2.Util.Singleton<Manager.UserDataManager>.Instance;
-                var userData = manager != null ? manager.GetUserData(0) : null;
-                var charaList = userData != null ? userData.CharaList : null;
-                if (charaList != null)
-                {
-                    for (int i = 0; i < charaList.Count; i++)
-                    {
-                        var c = charaList[i];
-                        if (c != null && c.ID > 0) return true;
-                    }
-                }
+                return manager != null ? manager.GetUserData(0) : null;
             }
-            catch (Exception) { }
-            return false;
+            catch (Exception) { return null; }
         }
 
         /// <summary>

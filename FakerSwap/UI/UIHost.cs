@@ -241,6 +241,7 @@ namespace FakerSwap.UI
             snap.LastError = RebirthFlow.LastError ?? "";
             snap.Busy = RebirthFlow.IsBusy;
             snap.CrawlOnly = RebirthFlow.CrawlOnly;
+            snap.CrawlDoneCount = RebirthFlow.CrawlDoneCount;
             snap.GameStage = StageText();
 
             snap.LockActive = MachineLock.Active;

@@ -206,6 +206,8 @@ namespace FakerSwap.UI.NativeWindow
         public int AreaCount;
         /// <summary>True while the dedicated area-crawl mode owns the credit loop.</summary>
         public bool CrawlOnly;
+        /// <summary>Areas already crawled this round (persisted in crawl-state.json).</summary>
+        public int CrawlDoneCount;
 
         // ---- area crawl panel -------------------------------------------------------------
         public AreaEntry[] Areas = EmptyAreas;

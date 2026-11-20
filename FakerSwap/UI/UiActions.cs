@@ -410,6 +410,23 @@ namespace FakerSwap.UI
             });
         }
 
+        /// <summary>Forget the persisted "already crawled this round" set.</summary>
+        public static void ClearCrawlDone()
+        {
+            MainThread.Post(() =>
+            {
+                try
+                {
+                    RebirthFlow.ClearCrawlDone();
+                }
+                catch (Exception e)
+                {
+                    Log.Error("UI: ClearCrawlDone failed", e);
+                    WindowRequests.Notice("清空已跑记录失败：" + e.Message);
+                }
+            });
+        }
+
         // ---------------------------------------------------------------- task control
 
         public static void StartTransfer()

@@ -29,6 +29,12 @@ namespace FakerSwap.Data
             "TitleList", "IconList", "PlateList", "FrameList", "PartnerList"
         };
 
+        /// <summary>Possible backing-field names of <c>UserData.CharaList</c> (field names differ per build).</summary>
+        private static readonly string[] CharaFields =
+        {
+            "_userCharaList", "userCharaList", "_charaList", "charaList"
+        };
+
         private static readonly Dictionary<string, FieldInfo> FieldCache = new Dictionary<string, FieldInfo>();
         private static readonly object Sync = new object();
 
@@ -97,6 +103,103 @@ namespace FakerSwap.Data
         {
             var prop = ud.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
             return prop != null ? prop.GetValue(ud, null) as List<UserItem> : null;
+        }
+
+        // ---------------------------------------------------------------- characters (旅行伙伴)
+
+        /// <summary>Real character list (field-backed, never throws).</summary>
+        public static List<UserChara> GetCharaList(UserData ud)
+        {
+            if (ud == null) return null;
+            for (int i = 0; i < CharaFields.Length; i++)
+            {
+                try
+                {
+                    FieldInfo field = FindFieldOfType(ud.GetType(), CharaFields[i], typeof(List<UserChara>));
+                    if (field == null) continue;
+                    var list = field.GetValue(ud) as List<UserChara>;
+                    if (list != null) return list;
+                }
+                catch (Exception) { }
+            }
+            try
+            {
+                var prop = ud.GetType().GetProperty("CharaList", BindingFlags.Public | BindingFlags.Instance);
+                return prop != null ? prop.GetValue(ud, null) as List<UserChara> : null;
+            }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>
+        /// True when the account owns at least one character.  Checks the real list first, then
+        /// <c>UserDetail.CharaSlot</c> (the 5 partner slots the game composes at entry).
+        /// </summary>
+        public static bool HasAnyCharacter(UserData ud)
+        {
+            if (ud == null) return false;
+            try
+            {
+                var list = GetCharaList(ud);
+                if (list != null)
+                {
+                    for (int i = 0; i < list.Count; i++)
+                    {
+                        var c = list[i];
+                        if (c != null && c.ID > 0) return true;
+                    }
+                }
+            }
+            catch (Exception) { }
+            try
+            {
+                var detail = ud.Detail;
+                if (detail != null)
+                {
+                    var slots = ReadMember(detail, "CharaSlot") as Array;
+                    if (slots != null)
+                    {
+                        foreach (var value in slots)
+                        {
+                            if (value == null) continue;
+                            if (Convert.ToInt32(value) > 0) return true;
+                        }
+                    }
+                }
+            }
+            catch (Exception) { }
+            return false;
+        }
+
+        private static object ReadMember(object target, string name)
+        {
+            if (target == null) return null;
+            try
+            {
+                var prop = target.GetType().GetProperty(name, BindingFlags.Public | BindingFlags.Instance);
+                if (prop != null) return prop.GetValue(target, null);
+            }
+            catch (Exception) { }
+            try
+            {
+                var field = target.GetType().GetField(name, BindingFlags.Public | BindingFlags.Instance);
+                if (field != null) return field.GetValue(target);
+            }
+            catch (Exception) { }
+            return null;
+        }
+
+        private static FieldInfo FindFieldOfType(System.Type type, string name, System.Type fieldType)
+        {
+            lock (Sync)
+            {
+                string key = type.FullName + ":" + name + ":" + fieldType.Name;
+                FieldInfo cached;
+                if (FieldCache.TryGetValue(key, out cached)) return cached;
+                FieldInfo found = type.GetField(name, BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public);
+                if (found != null && found.FieldType != fieldType) found = null;
+                FieldCache[key] = found;
+                return found;
+            }
         }
 
         private static FieldInfo FindField(System.Type type, string name)
