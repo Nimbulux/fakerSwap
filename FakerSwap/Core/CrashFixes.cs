@@ -61,6 +61,11 @@ namespace FakerSwap.Core
                         harmony.PatchAll(typeof(MusicSelectOnStartMusicSelectGuard));
                         Log.Info("CrashFixes: MusicSelectMonitor.OnStartMusicSelect NRE 已兜底");
                     }
+                    if (AccessTools.Method(typeof(Process.ContinueProcess), "ReLogin") != null)
+                    {
+                        harmony.PatchAll(typeof(ContinueProcessReLoginTrace));
+                        Log.Info("CrashFixes: ContinueProcess.ReLogin 轨迹捕获已安装");
+                    }
                 }
                 catch (Exception e) { Log.Error("CrashFixes: MusicSelect 倒计时/OnGameStart 补丁安装失败", e); }
                 Log.Info("CrashFixes: GameProcess.OnStart Finalizer installed (续关后 NRE 不再整局崩溃)");
@@ -530,6 +535,17 @@ namespace FakerSwap.Core
                     return null;
                 }
                 return __exception;
+            }
+        }
+
+        /// <summary>只观测：原生续关是否真的调用 ContinueProcess.ReLogin（对照手动游玩抓包用）。</summary>
+        [HarmonyLib.HarmonyPatch(typeof(Process.ContinueProcess), "ReLogin")]
+        internal static class ContinueProcessReLoginTrace
+        {
+            [HarmonyLib.HarmonyPostfix]
+            private static void Postfix(int id)
+            {
+                Log.Info("[trace] ContinueProcess.ReLogin(id=" + id + ") 被调用（原生续关登录）");
             }
         }
     }

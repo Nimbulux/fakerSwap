@@ -159,8 +159,9 @@ namespace FakerSwap.Flow
         private static int _snapStableReads;
         private static bool _continueLoginLogged;
         private static bool _continueCreditBumped;
-        private static double _contTouchAt;
-        private static int _contTouchIdx;
+        private static double _continueTapAt = -100;
+        private static int _continueTapTries;
+        private static bool _continueAcceptedLogged;
         private static int _snapLastCount = -1;
         private static double _continueSettleUntil = -1;
         private static double _lastReadTryAt = -100;
@@ -1788,7 +1789,7 @@ namespace FakerSwap.Flow
                 _targetRating = UserDataPatcher.ReadRating(_monitor);
                 _targetRecords = snap.Records;
                 try                 {                     FakerSwap.Network.PayloadRewriter.SetKnownMusic(_targetRecords);
-    FakerSwap.Network.PayloadRewriter.ResetSessionCredit();                     Log.Info("flow: isNew 修正基线 = 账号已有 " + _targetRecords.Count + " 条谱面");                 }                 catch (Exception e) { Log.Warn("flow: SetKnownMusic 失败: " + e.Message); }
+                         Log.Info("flow: isNew 修正基线 = 账号已有 " + _targetRecords.Count + " 条谱面");                 }                 catch (Exception e) { Log.Warn("flow: SetKnownMusic 失败: " + e.Message); }
                 Log.Info("flow: target account read, rating=" + _targetRating + ", records=" + snap.Records.Count);
                 SetPhase(FlowPhase.Planning, "生成转生计划…");
                 SetStep(Step.Planning, "");
@@ -3086,7 +3087,7 @@ namespace FakerSwap.Flow
                     // Clear navigation's logout-mode latch BEFORE driving MODE SELECT: the previous
                     // credit's ForceTimeUp path otherwise makes MODE SELECT ignore OK (~5-7s window).
                     _continueTrackResetPending = true;   // 新 credit：等下把 track 计数重置回 1
-                    if (!_continueCreditBumped) { _continueCreditBumped = true; FakerSwap.Network.PayloadRewriter.BumpSessionCredit(); }
+                    
                     if (Phase != FlowPhase.Transferring)
                         SetPhase(FlowPhase.Transferring, "续关成功，继续转生…");
                     TryResetNavLogoutMode();
@@ -3349,10 +3350,9 @@ namespace FakerSwap.Flow
         /// the single signature <c>PressContinueYes(int monitor = 0)</c>, so call it directly; fall
         /// back to its ContinueToNextTrack / the game's IsSelectContinue flag when it refuses.
         /// </summary>
+
         private static bool TryPressContinueYes()
         {
-            // A real operator press works where our old injection did not.
-            // 用户实机确认：续关屏「是」= 4 号键，「否」= 5 号键，绝不能扫键。
             if (ManualContinueYes || ContinueDiag.InputSilenced)
             {
                 if (!_manualContinueLogged)
@@ -3365,50 +3365,44 @@ namespace FakerSwap.Flow
             }
             try
             {
-                // 实机抓包（20:29:38.942 → 20:29:41.920）确认的续关手感：
-                //   state=1 → 2（等待）→ 3（是/否选择屏）→ 按住 4 号键 约 2.2 秒 → ReLogin() 被接受
-                //   PushTime 累计到 1879ms，松开后 0.75s 才切 state=4
-                // 所以必须「连续按住」而不是点一下；这里每帧重置帧数就是一直按住，
-                // 直到流程自己离开续关屏（ReLogin 后 state 变成 4/5/7）。
+                // 原版抓包（2026-11-21 01:52:36 手动）：state=2 → 点一下 4 号键 50ms → state=3
+                // → 约 3 秒后游戏自己调用 ContinueProcess.ReLogin() 发 UserLoginApi(isContinue=true)。
+                // 只点按一次并等待；不要长按/触摸刷屏/合成调用。
                 var cont = NavProcess.Find<global::Process.ContinueProcess>();
                 int contState = cont != null ? NavReflect.ToInt(NavReflect.Get(cont, "_state")) : -1;
-                // 只在「是/否」屏（state 2/3）按住 4 号键；其它状态一律松开。
-                // 红线：5 号键 =「否」，任何情况下都不注入。
-                if (cont == null || contState < 2 || contState > 3)
+                if (cont == null || contState < 2)
                 {
-                    ButtonHold.Cancel();
+                    _continueTapAt = -100;
+                    _continueTapTries = 0;
+                    _continueAcceptedLogged = false;
                     return false;
                 }
-                // 原版续关是「触摸屏上的 YES 按钮」；只按 4 号键在国服会卡在 state=2 不进入 ReLogin。
-                double nowTouch = UnityEngine.Time.realtimeSinceStartup;
-                if (nowTouch - _contTouchAt >= 0.45)
+                if (contState >= 4)
                 {
-                    _contTouchAt = nowTouch;
-                    string area = Navigation.ContinueButtonTouchAreas[_contTouchIdx++ % Navigation.ContinueButtonTouchAreas.Length];
-                    bool touchOk = false;
-                    try { touchOk = Navigation.Touch(0, area, 2); } catch (Exception) { }
-                    NavReflect.WarnOnce("cont-touch-" + contState, "[flow] 续关: 触摸 YES 区域 " + area + " (state=" + contState + ") ok=" + touchOk);
+                    ButtonHold.Cancel();
+                    if (!_continueAcceptedLogged)
+                    {
+                        _continueAcceptedLogged = true;
+                        Log.Info("[flow] 续关: 游戏已接受 YES（state=" + contState + "），等待 ReLogin/下一局…");
+                    }
+                    return true;
                 }
-                ButtonHold.Press(0, Manager.InputManager.ButtonSetting.Button04, 200);
-                NavReflect.WarnOnce("cont-hold-" + contState,
-                    "[flow] 续关: 按住 4 号键，ContinueProcess.state=" + contState + "（实测需 ~2.2s）");
-            }
-            catch (Exception) { }
-            try
-            {
-                if (Navigation.PressContinueYes(_monitor >= 0 ? _monitor : 0)) return true;
+                double now = UnityEngine.Time.realtimeSinceStartup;
+                if (now - _continueTapAt >= 4.0)
+                {
+                    _continueTapAt = now;
+                    _continueTapTries++;
+                    InputInject.Press(0, Manager.InputManager.ButtonSetting.Button04);
+                    Log.Info("[flow] 续关: 点按 4 号键 YES (state=" + contState + ", 第 " + _continueTapTries +
+                             " 次) → 等游戏自己 ReLogin");
+                }
+                return true;
             }
             catch (Exception e)
             {
-                Log.Warn("flow: PressContinueYes failed: " + e.Message);
+                Log.Warn("flow: TryPressContinueYes failed: " + e.Message);
+                return false;
             }
-            try
-            {
-                if (Navigation.ContinueToNextTrack()) return true;
-            }
-            catch (Exception) { }
-            SetSelectContinue(true);
-            return true;
         }
 
         // ---------------------------------------------------------------- helpers

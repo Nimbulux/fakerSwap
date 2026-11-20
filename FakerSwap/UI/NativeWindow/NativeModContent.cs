@@ -32,9 +32,7 @@ namespace FakerSwap.UI.NativeWindow
         // settings panel (window-thread local UI state)
         private static bool _settingsExpanded = true;
         private static string _fillerText = "";
-        private static int _fillerEditedAt;
         private static string _areaTimeoutText = "";
-        private static int _areaTimeoutEditedAt;
         private static int _openDropdownField;
         private static string[] _dropdownOptions;
         private static int _dropdownSelected;
@@ -760,9 +758,8 @@ namespace FakerSwap.UI.NativeWindow
             c.Fill(x, y, width, headerH, Theme.Panel);
             c.Border(x, y, width, headerH, Theme.Border);
             c.Text("设置", x + c.S(8), y, c.S(56), headerH, Theme.Accent, false, true);
-            string summary = PlayRealismShort(s.PlayRealism) + "   ·   每批 " + s.BatchSize +
-                             " 首   ·   " + LevelShort(s.MinLevel) + " ~ " + LevelShort(s.MaxLevel) +
-                             "   ·   写入 " + s.WriteMode;
+            string summary = PlayRealismShort(s.PlayRealism) + "   ·   " + LevelShort(s.MinLevel) + " ~ " +
+                             LevelShort(s.MaxLevel) + "   ·   长版 " + LongSongModeShort(s.LongSongMode);
             c.TextSmall(summary, x + c.S(58), y + c.S(7), width - c.S(272), c.S(18), Theme.Muted);
             if (c.Button(_settingsExpanded ? "收起" : "展开", x + width - c.S(70), y + c.S(3), c.S(64), c.S(24)))
                 _settingsExpanded = !_settingsExpanded;
@@ -774,87 +771,25 @@ namespace FakerSwap.UI.NativeWindow
             int rightX = x + colW + gap;
             int leftY = y;
             int rightY = y;
-            int now = Environment.TickCount;
 
-            // ---- left column: play / write / batch / levels / numeric ----
+            // 左列：玩法 / 难度 / 长版
             leftY = SettingsDropdownRow(c, 1, "游玩模式", PlayRealismShort(s.PlayRealism),
                 new[] { "C·真实时长", "B·秒跳" }, s.PlayRealism == "Judge" ? 1 : 0, x, leftY, colW);
-            leftY = SettingsDropdownRow(c, 2, "写入方式", s.WriteMode,
-                new[] { "Both", "Payload", "Memory" }, WriteModeIndex(s.WriteMode), x, leftY, colW);
-            leftY = SettingsBatchRow(c, s, x, leftY, colW);
-            leftY = SettingsDropdownRow(c, 3, "难度下限", LevelShort(s.MinLevel),
+            leftY = SettingsDropdownRow(c, 2, "难度下限", LevelShort(s.MinLevel),
                 new[] { "BASIC", "ADVANCED", "EXPERT", "MASTER", "Re:MASTER" }, s.MinLevel, x, leftY, colW);
-            leftY = SettingsDropdownRow(c, 4, "难度上限", LevelShort(s.MaxLevel),
+            leftY = SettingsDropdownRow(c, 3, "难度上限", LevelShort(s.MaxLevel),
                 new[] { "BASIC", "ADVANCED", "EXPERT", "MASTER", "Re:MASTER" }, s.MaxLevel, x, leftY, colW);
-            leftY = SettingsDropdownRow(c, 5, "长版歌曲", LongSongModeShort(s.LongSongMode),
+            leftY = SettingsDropdownRow(c, 4, "长版歌曲", LongSongModeShort(s.LongSongMode),
                 new[] { "正常跑", "跳过", "直写" }, LongSongModeIndex(s.LongSongMode), x, leftY, colW);
 
-            // filler musicId (numeric input)
-            if (!c.IsFocus(9001) && unchecked(now - _fillerEditedAt) > 700 &&
-                _fillerText != s.FillerMusicId.ToString())
-                _fillerText = s.FillerMusicId.ToString();
-            c.TextSmall("填充曲（musicId）", x, leftY + c.S(6), colW - c.S(116), c.S(18), Theme.Muted);
-            string fillerField = c.TextField(_fillerText, 9001, x + colW - c.S(110), leftY + c.S(2),
-                c.S(110), c.S(24));
-            if (fillerField != _fillerText)
-            {
-                _fillerText = fillerField;
-                _fillerEditedAt = now;
-            }
-            int fillerValue;
-            if (int.TryParse(_fillerText, out fillerValue) && fillerValue >= 1 && fillerValue <= 99999 &&
-                fillerValue != s.FillerMusicId && (!c.IsFocus(9001) || unchecked(now - _fillerEditedAt) > 800))
-            {
-                _fillerEditedAt = now;
-                UiActions.SetFillerMusicId(fillerValue);
-            }
-            leftY += c.S(32);
-
-            // area-select timeout (numeric input, 1..10 s)
-            string expectedTimeout = s.AreaSelectTimeoutSec.ToString("0.#");
-            if (!c.IsFocus(9002) && unchecked(now - _areaTimeoutEditedAt) > 700 &&
-                _areaTimeoutText != expectedTimeout)
-                _areaTimeoutText = expectedTimeout;
-            c.TextSmall("选区等待（秒）", x, leftY + c.S(6), colW - c.S(116), c.S(18), Theme.Muted);
-            string timeoutField = c.TextField(_areaTimeoutText, 9002, x + colW - c.S(110), leftY + c.S(2),
-                c.S(110), c.S(24));
-            if (timeoutField != _areaTimeoutText)
-            {
-                _areaTimeoutText = timeoutField;
-                _areaTimeoutEditedAt = now;
-            }
-            double timeoutValue;
-            if (double.TryParse(_areaTimeoutText, System.Globalization.NumberStyles.Float,
-                    System.Globalization.CultureInfo.InvariantCulture, out timeoutValue) &&
-                timeoutValue >= 1.0 && timeoutValue <= 10.0 &&
-                Math.Abs(timeoutValue - s.AreaSelectTimeoutSec) > 0.001 &&
-                (!c.IsFocus(9002) || unchecked(now - _areaTimeoutEditedAt) > 800))
-            {
-                _areaTimeoutEditedAt = now;
-                UiActions.SetAreaSelectTimeoutSec(timeoutValue);
-            }
-            leftY += c.S(32);
-
-            // ---- right column: toggles ----
-            rightY = SettingsToggleRow(c, "二次确认", s.ConfirmBeforeStart,
-                UiActions.SetConfirmBeforeStart, rightX, rightY, colW);
-            rightY = SettingsToggleRow(c, "续关优先（实验性）", s.ContinueRelogin,
-                UiActions.SetContinueRelogin, rightX, rightY, colW);
+            // 右列：安全 / 选票
             rightY = SettingsToggleRow(c, "机台锁", s.LockInput,
                 UiActions.SetLockInput, rightX, rightY, colW);
-            rightY = SettingsSafeNoWriteRow(c, s, rightX, rightY, colW);
-            rightY = SettingsCrawlFallbackRow(c, rightX, rightY, colW);
-            rightY = SettingsToggleRow(c, "自动建号（DEV）", s.AllowConfirmNewUser,
-                UiActions.SetAllowConfirmNewUser, rightX, rightY, colW);
-            rightY = SettingsToggleRow(c, "强制覆盖已有成绩", s.ForceOverwriteExisting,
-                UiActions.SetForceOverwriteExisting, rightX, rightY, colW);
-            rightY = SettingsToggleRow(c, "地图结果兜底（老账号）", s.MapResultGuard,
-                UiActions.SetMapResultGuard, rightX, rightY, colW);
+            rightY = SettingsToggleRow(c, "开始前二次确认", s.ConfirmBeforeStart,
+                UiActions.SetConfirmBeforeStart, rightX, rightY, colW);
             rightY = SettingsToggleRow(c, "选票保持（每次用上次手选的票）", s.TicketUseKeep,
                 UiActions.SetTicketUseKeep, rightX, rightY, colW);
             rightY = SettingsTicketRow(c, s, rightX, rightY, colW);
-
-            y = Math.Max(leftY, rightY);
             c.TextSmall("* 改动立即写入 FakerSwap/config.json；多数项下一批/下次开始任务生效。Dev/实验项仅测试用。",
                 x, y, width, c.S(18), Theme.Muted);
             y += c.S(24);

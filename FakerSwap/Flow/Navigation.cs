@@ -1251,9 +1251,7 @@ namespace FakerSwap.Flow
         private static int _continueStep;
         private static double _continueYesAt = -1000;
         private static double _continueTouchAt = -1000;
-        private static int _continueTouchIdx;
         private static ulong _continueLoginBase;
-        private static bool _continueReloginSent;
         private static double _continueLoginAt = -1000;
         /// <summary>本次续关开始前的 loginId（用于判断游戏是否真的做了 isContinue 登录）。</summary>
         public static ulong ContinueLoginBaseId { get { return _continueLoginBase; } }
@@ -2625,6 +2623,8 @@ namespace FakerSwap.Flow
         private static bool _ticketTimedUp;
 
         private static double _charaAt = -1000;
+        private static double _charaSince = -1;
+        private static bool _charaPressed;
         private static int _charaStateLogged = -1;
 
         /// <summary>角色选择页：真实 4 号键「決定」（确认默认角色）。</summary>
@@ -2696,18 +2696,43 @@ namespace FakerSwap.Flow
             try
             {
                 var process = NavProcess.FindByName("CharacterSelectProces", "CharacterSelectProcess");
-                if (process == null) { _charaAt = -1000; _charaStateLogged = -1; return false; }
+                if (process == null)
+                {
+                    _charaAt = -1000;
+                    _charaStateLogged = -1;
+                    _charaSince = -1;
+                    _charaPressed = false;
+                    return false;
+                }
                 int state = GetInstanceInt(process, "_state");
+                double now = Time.realtimeSinceStartup;
+                if (_charaSince < 0)
+                {
+                    _charaSince = now;
+                    _charaPressed = false;
+                    Log.Info("[nav] 旅行伙伴选择页出现: state=" + state + "（等画面展开 ~1.5s 再按決定）");
+                }
                 if (state != _charaStateLogged)
                 {
                     _charaStateLogged = state;
-                    Log.Info("[nav] 角色选择页: state=" + state + "（4 号键=決定，正常操作）");
+                    Log.Info("[nav] 旅行伙伴选择页: state=" + state);
                 }
-                double now = Time.realtimeSinceStartup;
-                if (now - _charaAt < 0.8) return false;
-                _charaAt = now;
-                InputInject.Press(monitor, Manager.InputManager.ButtonSetting.Button04);
-                Log.Info("[nav] 角色选择页: 注入 4 号键決定 state=" + state);
+                // 原版会先展示角色/给出选择动画；至少等 1.5s，避免画面刚出现就被按掉（看起来像被跳过）。
+                if (!_charaPressed && now - _charaSince >= 1.5)
+                {
+                    _charaPressed = true;
+                    _charaAt = now;
+                    InputInject.Press(monitor, Manager.InputManager.ButtonSetting.Button04);
+                    Log.Info("[nav] 旅行伙伴选择页: 按 4 号键決定（已展示 " + (now - _charaSince).ToString("0.0") + "s）");
+                    return true;
+                }
+                // 按过但 4s 没离开：再按一次
+                if (_charaPressed && now - _charaAt >= 4.0)
+                {
+                    _charaAt = now;
+                    InputInject.Press(monitor, Manager.InputManager.ButtonSetting.Button04);
+                    Log.Info("[nav] 旅行伙伴选择页: 重按 4 号键決定 state=" + state);
+                }
                 return true;
             }
             catch (Exception e)

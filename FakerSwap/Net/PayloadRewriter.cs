@@ -231,51 +231,6 @@ namespace FakerSwap.Network
                 }
                 catch (Exception e) { Log.Warn("[net] isNew/重复行 修正失败: " + e.Message); }
 
-                // credit 序号：同一个 login session 里第二次存档应带 lastPlayCredit=2 / playCredit=2。
-                // 我们的续关路径让游戏一直报 1（实机 02:25 rc=0），这里按 session 内第几次存档强制修正。
-                try
-                {
-                    string apiName = query.Api ?? "";
-                    if (apiName.IndexOf("UpsertUserAll", StringComparison.OrdinalIgnoreCase) >= 0)
-                    {
-                        _sessionSaveIndex++;   // 仅作诊断，不再作为 credit 序号
-                        object ud0 = null;
-                        var udField = vo.upsertUserAll.GetType().GetField("userData", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                        object udObj = udField != null ? udField.GetValue(vo.upsertUserAll) : null;
-                        var udArr = udObj as Array;
-                        if (udArr != null && udArr.Length > 0) ud0 = udArr.GetValue(0);
-                        else if (udObj != null) ud0 = udObj;
-                        if (ud0 != null)
-                        {
-                            var t = ud0.GetType();
-                            var lpc = t.GetField("lastPlayCredit", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                            if (lpc != null && Convert.ToInt32(lpc.GetValue(ud0)) != _sessionCredit)
-                            {
-                                Log.Warn("[net] lastPlayCredit 修正: " + lpc.GetValue(ud0) + " → " + _sessionCredit + "（本次登录第 " + _sessionCredit + " 个 credit）");
-                                lpc.SetValue(ud0, _sessionCredit);
-                // Net.VO.Mai2.UserDetail 是 struct：GetValue 拿到的是装箱副本，必须写回数组
-                if (ud0.GetType().IsValueType && udArr != null) udArr.SetValue(ud0, 0);
-                            }
-                        }
-                        var gplField = vo.upsertUserAll.GetType().GetField("userGamePlaylogList", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                        var gpl = gplField != null ? gplField.GetValue(vo.upsertUserAll) as Array : null;
-                        if (gpl != null)
-                        {
-                            for (int i = 0; i < gpl.Length; i++)
-                            {
-                                object g = gpl.GetValue(i);
-                                if (g == null) continue;
-                                var pc = g.GetType().GetField("playCredit", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
-                                if (pc != null && Convert.ToInt32(pc.GetValue(g)) != _sessionCredit)
-                                {
-                                    pc.SetValue(g, _sessionCredit);
-                                    if (g.GetType().IsValueType) gpl.SetValue(g, i);   // UserGamePlaylog 是 struct，需写回数组
-                                }
-                            }
-                        }
-                    }
-                }
-                catch (Exception e) { Log.Warn("[net] lastPlayCredit 修正失败: " + e.Message); }
 
 
                 if (rows <= 0) return false;   // 无待写行：元数据/去重已应用，但没有需要落库的成绩
