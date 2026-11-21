@@ -127,6 +127,7 @@ namespace FakerSwap.Data
             catch (Exception) { overwrite = false; }
             foreach (var r in list)
             {
+                int desiredAchv = overwrite ? MirrorAchievement(r.Achievement) : r.Achievement;
                 if (existing.Count > 0)
                 {
                     ScoreRecord old;
@@ -134,8 +135,8 @@ namespace FakerSwap.Data
                     {
                         if (overwrite)
                         {
-                            // 覆盖模式：分数完全一样才跳过；不同（包括目标更高）一律按源成绩重传。
-                            if (old.Achievement == r.Achievement)
+                            // 覆盖模式：源成绩（含镜像后的值）与目标完全一样才跳过；不同一律重传。
+                            if (old.Achievement == desiredAchv)
                             {
                                 res.AlreadyDone.Add(r);
                                 continue;
@@ -149,12 +150,38 @@ namespace FakerSwap.Data
                     }
                 }
                 var item = new TransferItem { Desired = r.Clone(), Index = idx++ };
+                if (item.Desired.Achievement != desiredAchv)
+                {
+                    Log.Info("[plan] 达成率镜像上取整: " + r.MusicId + "-" + r.Level + "  " +
+                             (r.Achievement / 10000.0).ToString("0.0000") + "% → " +
+                             (desiredAchv / 10000.0).ToString("0.0000") + "%");
+                    item.Desired.Achievement = desiredAchv;
+                }
                 if (GenerateJudgeBreakdown) AttachJudge(item.Desired);
                 res.Items.Add(item);
             }
 
             Log.Info("plan: " + res + (existing.Count > 0 ? " (target records=" + existing.Count + ")" : ""));
             return res;
+        }
+
+        /// <summary>
+        /// 覆盖模式的达成率规则：小数部分 ≥ .9000 时「镜像上取整」——
+        /// 整数位 +1，小数变成 1-小数。例：97.9191% → 98.0809%。
+        /// 上限 101.0000%，超出则保持原值。
+        /// </summary>
+        private static int MirrorAchievement(int achv)
+        {
+            if (achv <= 0) return achv;
+            bool on;
+            try { on = ModConfig.Data.AchievementMirrorUp; }
+            catch (Exception) { on = false; }
+            if (!on) return achv;
+            int frac = achv % 10000;
+            if (frac < 9000) return achv;
+            int mirrored = (achv / 10000 + 1) * 10000 + (10000 - frac);
+            if (mirrored > 1010000) return achv;
+            return mirrored;
         }
 
         /// <summary>True when the operator blacklisted this song in config (SkipMusicIds).</summary>

@@ -96,6 +96,10 @@ namespace FakerSwap.Core
         /// <summary>游玩次数覆盖为 源次数 × 该百分比（向下取整，至少 1）。0=不改，100=保持源次数。</summary>
         public int PlayCountPercent = 50;
 
+        /// <summary>覆盖模式下，达成率小数部分 ≥ .9000 的做「镜像上取整」：
+        /// 97.9191% → 98.0809%（整数位+1，1-小数作为新小数）。</summary>
+        public bool AchievementMirrorUp = true;
+
         /// <summary>自动刷卡（写 aime.txt + 回车）。默认 false：只停在登录页，等人工刷卡。</summary>
         public bool AutoSwipe = false;
         /// <summary>Areas the operator wants to crawl (empty = all / whatever the game offers).</summary>
@@ -231,6 +235,7 @@ namespace FakerSwap.Core
                 d.PlayCountPercent = root["PlayCountPercent"].AsInt(d.PlayCountPercent);
                 if (d.PlayCountPercent < 0) d.PlayCountPercent = 0;
                 if (d.PlayCountPercent > 100) d.PlayCountPercent = 100;
+                d.AchievementMirrorUp = root["AchievementMirrorUp"].AsBool(d.AchievementMirrorUp);
                 d.SkipMusicIds = new List<int>();
                 var skipArr = root["SkipMusicIds"];
                 if (skipArr.Kind == JsonKind.Array)
@@ -326,6 +331,7 @@ namespace FakerSwap.Core
                 o["CrawlCreditLimit"] = JsonValue.Of(d.CrawlCreditLimit);
                 o["OverwriteScores"] = JsonValue.Of(d.OverwriteScores);
                 o["PlayCountPercent"] = JsonValue.Of(d.PlayCountPercent);
+                o["AchievementMirrorUp"] = JsonValue.Of(d.AchievementMirrorUp);
                 var skipSave = JsonValue.NewArray();
                 if (d.SkipMusicIds != null)
                     foreach (var skipId in d.SkipMusicIds) skipSave.Add(JsonValue.Of(skipId));
