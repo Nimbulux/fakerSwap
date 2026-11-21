@@ -886,6 +886,8 @@ namespace FakerSwap.UI.NativeWindow
                 UiActions.SetDxBonusMin, x, leftY, colW);
             leftY = SettingsNumberRow(c, "DX 加分上限", s.DxBonusMax, 0, 50, 1,
                 UiActions.SetDxBonusMax, x, leftY, colW);
+            leftY = SettingsNumberRow(c, "低分抬升下限 %（0=不改）", s.MinAchievementPercent, 0, 101, 5,
+                UiActions.SetMinAchievementPercent, x, leftY, colW);
 
             // 右列：安全 / 选票
             rightY = SettingsToggleRow(c, "机台锁", s.LockInput,

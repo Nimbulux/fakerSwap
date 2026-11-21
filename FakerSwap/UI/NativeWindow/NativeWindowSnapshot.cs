@@ -192,6 +192,8 @@ namespace FakerSwap.UI.NativeWindow
         public int PlayCountPercent = 50;
         public int DxBonusMin = 5;
         public int DxBonusMax = 10;
+        /// <summary>低分抬升下限（百分比整数，80 = 80%）。</summary>
+        public int MinAchievementPercent = 80;
 
         // ---- build info / capabilities ---------------------------------------------------
         public string VersionText = "";

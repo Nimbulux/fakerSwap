@@ -105,6 +105,10 @@ namespace FakerSwap.Core
         public int DxBonusMin = 5;
         public int DxBonusMax = 10;
 
+        /// <summary>源成绩低于该值时自动抬到该值以上再传（1/10000 %，默认 80%）。0=关闭。
+        /// FC/AP 等徽章保持源标记不变；DX 由判定表按新成绩重算。</summary>
+        public int MinAchievement = 800000;
+
         /// <summary>自动刷卡（写 aime.txt + 回车）。默认 false：只停在登录页，等人工刷卡。</summary>
         public bool AutoSwipe = false;
         /// <summary>Areas the operator wants to crawl (empty = all / whatever the game offers).</summary>
@@ -246,6 +250,9 @@ namespace FakerSwap.Core
                 if (d.DxBonusMin < 0) d.DxBonusMin = 0;
                 if (d.DxBonusMax < 0) d.DxBonusMax = 0;
                 if (d.DxBonusMax < d.DxBonusMin) d.DxBonusMax = d.DxBonusMin;
+                d.MinAchievement = root["MinAchievement"].AsInt(d.MinAchievement);
+                if (d.MinAchievement < 0) d.MinAchievement = 0;
+                if (d.MinAchievement > 1010000) d.MinAchievement = 1010000;
                 d.SkipMusicIds = new List<int>();
                 var skipArr = root["SkipMusicIds"];
                 if (skipArr.Kind == JsonKind.Array)
@@ -344,6 +351,7 @@ namespace FakerSwap.Core
                 o["AchievementMirrorUp"] = JsonValue.Of(d.AchievementMirrorUp);
                 o["DxBonusMin"] = JsonValue.Of(d.DxBonusMin);
                 o["DxBonusMax"] = JsonValue.Of(d.DxBonusMax);
+                o["MinAchievement"] = JsonValue.Of(d.MinAchievement);
                 var skipSave = JsonValue.NewArray();
                 if (d.SkipMusicIds != null)
                     foreach (var skipId in d.SkipMusicIds) skipSave.Add(JsonValue.Of(skipId));

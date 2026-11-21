@@ -283,6 +283,7 @@ namespace FakerSwap.UI
             snap.PlayCountPercent = cfg.PlayCountPercent;
             snap.DxBonusMin = cfg.DxBonusMin;
             snap.DxBonusMax = cfg.DxBonusMax;
+            snap.MinAchievementPercent = cfg.MinAchievement / 10000;
 
             // ---- area crawl panel --------------------------------------------------------
             snap.Areas = BuildAreaEntries();

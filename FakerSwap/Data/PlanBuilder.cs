@@ -16,6 +16,8 @@ namespace FakerSwap.Data
         public List<ScoreRecord> OutOfRange = new List<ScoreRecord>();
         /// <summary>Records already present with the same or better achievement.</summary>
         public List<ScoreRecord> AlreadyDone = new List<ScoreRecord>();
+        /// <summary>源成绩低于 MinAchievement → 被抬到 80%+ 的记录数。</summary>
+        public int RaisedLow;
         public int SourceTotal;
         /// <summary>How many of the source records existed in the target account (diagnostics).</summary>
         public int ExistingTotal;
@@ -27,7 +29,7 @@ namespace FakerSwap.Data
         {
             return "items=" + Items.Count + " source=" + SourceTotal + " missing=" + Missing.Count +
                    " locked=" + Locked.Count + " outOfRange=" + OutOfRange.Count +
-                   " alreadyDone=" + AlreadyDone.Count;
+                   " alreadyDone=" + AlreadyDone.Count + " raised=" + RaisedLow;
         }
     }
 
@@ -128,6 +130,18 @@ namespace FakerSwap.Data
             foreach (var r in list)
             {
                 int desiredAchv = overwrite ? MirrorAchievement(r.Achievement) : r.Achievement;
+                bool raisedLow = false;
+                if (ModConfig.Data.MinAchievement > 0 && desiredAchv < ModConfig.Data.MinAchievement)
+                {
+                    int raised = ModConfig.Data.MinAchievement + _dxRng.Next(0, 2001);
+                    if (raised > 1010000) raised = 1010000;
+                    if (raised > desiredAchv)
+                    {
+                        desiredAchv = raised;
+                        raisedLow = true;
+                        res.RaisedLow++;
+                    }
+                }
                 if (existing.Count > 0)
                 {
                     ScoreRecord old;
@@ -142,7 +156,7 @@ namespace FakerSwap.Data
                                 continue;
                             }
                         }
-                        else if (skipAlreadyDone && old.Achievement >= r.Achievement)
+                        else if (skipAlreadyDone && old.Achievement >= desiredAchv)
                         {
                             res.AlreadyDone.Add(r);
                             continue;
@@ -152,12 +166,22 @@ namespace FakerSwap.Data
                 var item = new TransferItem { Desired = r.Clone(), Index = idx++ };
                 if (item.Desired.Achievement != desiredAchv)
                 {
-                    Log.Info("[plan] 达成率镜像上取整: " + r.MusicId + "-" + r.Level + "  " +
-                             (r.Achievement / 10000.0).ToString("0.0000") + "% → " +
-                             (desiredAchv / 10000.0).ToString("0.0000") + "%");
+                    if (raisedLow)
+                        Log.Info("[plan] 低分抬到 80%+: " + r.MusicId + "-" + r.Level + "  " +
+                                 (r.Achievement / 10000.0).ToString("0.0000") + "% → " +
+                                 (desiredAchv / 10000.0).ToString("0.0000") + "%");
+                    else
+                        Log.Info("[plan] 达成率镜像上取整: " + r.MusicId + "-" + r.Level + "  " +
+                                 (r.Achievement / 10000.0).ToString("0.0000") + "% → " +
+                                 (desiredAchv / 10000.0).ToString("0.0000") + "%");
                     item.Desired.Achievement = desiredAchv;
                 }
-                if (overwrite && ModConfig.Data.DxBonusMax > 0)
+                if (raisedLow)
+                {
+                    // 抬高后 DX 由判定表按新成绩重新计算（源 DX 与新高分不匹配）。
+                    item.Desired.DeluxscoreMax = 0;
+                }
+                else if (overwrite && ModConfig.Data.DxBonusMax > 0)
                 {
                     int before = item.Desired.DeluxscoreMax;
                     int bumped = BumpDx(r.MusicId, r.Level, before);

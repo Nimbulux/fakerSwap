@@ -363,6 +363,15 @@ namespace FakerSwap.UI
             });
         }
 
+        /// <summary>低分抬升下限（百分比整数，例如 80 = 低于 80% 的成绩自动拉到 80%+）。</summary>
+        public static void SetMinAchievementPercent(int value)
+        {
+            int pct = value;
+            if (pct < 0) pct = 0;
+            if (pct > 101) pct = 101;
+            ApplySetting("低分抬升下限=" + pct + "%", d => d.MinAchievement = pct * 10000);
+        }
+
         public static void SetLongSongMode(string value)
         {
             ApplySetting("长版歌曲=" + value, d => d.LongSongMode = value);
