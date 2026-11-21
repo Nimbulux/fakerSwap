@@ -319,6 +319,50 @@ namespace FakerSwap.UI
             ApplySetting("机台锁=" + (value ? "开" : "关"), d => d.LockInput = value);
         }
 
+        public static void SetOverwriteScores(bool value)
+        {
+            ApplySetting("覆盖已有成绩=" + (value ? "开（不同分强制重写，含降分）" : "关"),
+                d => d.OverwriteScores = value);
+        }
+
+        public static void SetAchievementMirrorUp(bool value)
+        {
+            ApplySetting("达成率镜像=" + (value ? "开（.9xxx → 进位取镜像）" : "关"),
+                d => d.AchievementMirrorUp = value);
+        }
+
+        public static void SetPlayCountPercent(int value)
+        {
+            int pct = value;
+            if (pct < 0) pct = 0;
+            if (pct > 100) pct = 100;
+            ApplySetting("游玩次数覆盖=" + pct + "%", d => d.PlayCountPercent = pct);
+        }
+
+        public static void SetDxBonusMin(int value)
+        {
+            int v = value;
+            if (v < 0) v = 0;
+            if (v > 50) v = 50;
+            ApplySetting("DX 加分下限=" + v, d =>
+            {
+                d.DxBonusMin = v;
+                if (d.DxBonusMax < d.DxBonusMin) d.DxBonusMax = d.DxBonusMin;
+            });
+        }
+
+        public static void SetDxBonusMax(int value)
+        {
+            int v = value;
+            if (v < 0) v = 0;
+            if (v > 50) v = 50;
+            ApplySetting("DX 加分上限=" + v, d =>
+            {
+                d.DxBonusMax = v;
+                if (d.DxBonusMax < d.DxBonusMin) d.DxBonusMin = d.DxBonusMax;
+            });
+        }
+
         public static void SetLongSongMode(string value)
         {
             ApplySetting("长版歌曲=" + value, d => d.LongSongMode = value);

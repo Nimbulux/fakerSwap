@@ -184,6 +184,14 @@ namespace FakerSwap.UI.NativeWindow
         public bool ForceOverwriteExisting;
         public bool MapResultGuard;
         public double AreaSelectTimeoutSec = 3.0;
+        /// <summary>覆盖模式：不同分强制按源成绩重写（允许降分）。</summary>
+        public bool OverwriteScores = true;
+        /// <summary>覆盖模式下达成率小数 ≥ .9 时镜像上取整。</summary>
+        public bool AchievementMirrorUp = true;
+        /// <summary>游玩次数覆盖百分比（源次数 × %，向下取整，至少 1）。</summary>
+        public int PlayCountPercent = 50;
+        public int DxBonusMin = 5;
+        public int DxBonusMax = 10;
 
         // ---- build info / capabilities ---------------------------------------------------
         public string VersionText = "";

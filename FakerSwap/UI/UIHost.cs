@@ -278,6 +278,11 @@ namespace FakerSwap.UI
             snap.ShowBanner = cfg.ShowOverlayBanner;
             snap.LockInput = cfg.LockInput;
             snap.SafeNoWrite = cfg.SafeNoWrite;
+            snap.OverwriteScores = cfg.OverwriteScores;
+            snap.AchievementMirrorUp = cfg.AchievementMirrorUp;
+            snap.PlayCountPercent = cfg.PlayCountPercent;
+            snap.DxBonusMin = cfg.DxBonusMin;
+            snap.DxBonusMax = cfg.DxBonusMax;
 
             // ---- area crawl panel --------------------------------------------------------
             snap.Areas = BuildAreaEntries();

@@ -853,7 +853,8 @@ namespace FakerSwap.UI.NativeWindow
             c.Border(x, y, width, headerH, Theme.Border);
             c.Text("设置", x + c.S(8), y, c.S(56), headerH, Theme.Accent, false, true);
             string summary = PlayRealismShort(s.PlayRealism) + "   ·   " + LevelShort(s.MinLevel) + " ~ " +
-                             LevelShort(s.MaxLevel) + "   ·   长版 " + LongSongModeShort(s.LongSongMode);
+                             LevelShort(s.MaxLevel) + "   ·   长版 " + LongSongModeShort(s.LongSongMode) +
+                             (s.OverwriteScores ? "   ·   覆盖成绩 开" : "   ·   覆盖成绩 关");
             c.TextSmall(summary, x + c.S(58), y + c.S(7), width - c.S(272), c.S(18), Theme.Muted);
             if (c.Button(_settingsExpanded ? "收起" : "展开", x + width - c.S(70), y + c.S(3), c.S(64), c.S(24)))
                 _settingsExpanded = !_settingsExpanded;
@@ -875,6 +876,16 @@ namespace FakerSwap.UI.NativeWindow
                 new[] { "BASIC", "ADVANCED", "EXPERT", "MASTER", "Re:MASTER" }, s.MaxLevel, x, leftY, colW);
             leftY = SettingsDropdownRow(c, 4, "长版歌曲", LongSongModeShort(s.LongSongMode),
                 new[] { "正常跑", "跳过", "直写" }, LongSongModeIndex(s.LongSongMode), x, leftY, colW);
+            leftY = SettingsToggleRow(c, "覆盖已有成绩（不同分强制重写）", s.OverwriteScores,
+                UiActions.SetOverwriteScores, x, leftY, colW);
+            leftY = SettingsToggleRow(c, "达成率镜像（.9xxx 转 .0xxx 进位）", s.AchievementMirrorUp,
+                UiActions.SetAchievementMirrorUp, x, leftY, colW);
+            leftY = SettingsNumberRow(c, "游玩次数覆盖 %（0=不改）", s.PlayCountPercent, 0, 100, 5,
+                UiActions.SetPlayCountPercent, x, leftY, colW);
+            leftY = SettingsNumberRow(c, "DX 加分下限", s.DxBonusMin, 0, 50, 1,
+                UiActions.SetDxBonusMin, x, leftY, colW);
+            leftY = SettingsNumberRow(c, "DX 加分上限", s.DxBonusMax, 0, 50, 1,
+                UiActions.SetDxBonusMax, x, leftY, colW);
 
             // 右列：安全 / 选票
             rightY = SettingsToggleRow(c, "机台锁", s.LockInput,
@@ -897,6 +908,23 @@ namespace FakerSwap.UI.NativeWindow
             c.TextSmall(label, x, y + c.S(5), width - c.S(92), c.S(18), Theme.Muted);
             bool next = c.Toggle(value, value ? "开" : "关", x + width - c.S(86), y + c.S(1), c.S(86), c.S(26));
             if (next != value && setter != null) setter(next);
+            return y + c.S(32);
+        }
+
+        /// <summary>数值设置行：[-] 值 [+]（无键盘输入，避免窗口焦点问题）。</summary>
+        private static int SettingsNumberRow(NativeCanvas c, string label, int value, int min, int max, int step,
+            Action<int> setter, int x, int y, int width)
+        {
+            c.TextSmall(label, x, y + c.S(5), width - c.S(150), c.S(18), Theme.Muted);
+            int btn = c.S(30);
+            int valueW = c.S(64);
+            int total = btn * 2 + valueW + c.S(8);
+            int bx = x + width - total;
+            if (c.Button("-", bx, y + c.S(1), btn, c.S(26)) && setter != null)
+                setter(Math.Max(min, value - step));
+            c.Text(value.ToString(), bx + btn + c.S(4), y, valueW, c.S(26), Theme.Text, true, false);
+            if (c.Button("+", bx + btn + valueW + c.S(8), y + c.S(1), btn, c.S(26)) && setter != null)
+                setter(Math.Min(max, value + step));
             return y + c.S(32);
         }
 
