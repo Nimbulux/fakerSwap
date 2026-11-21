@@ -122,15 +122,30 @@ namespace FakerSwap.Data
 
             // 4) optionally drop charts the target already has at the same/better achievement.
             int idx = 0;
+            bool overwrite;
+            try { overwrite = ModConfig.Data.OverwriteScores || ModConfig.Data.ForceOverwriteExisting; }
+            catch (Exception) { overwrite = false; }
             foreach (var r in list)
             {
-                if (skipAlreadyDone && existing.Count > 0)
+                if (existing.Count > 0)
                 {
                     ScoreRecord old;
-                    if (existing.TryGetValue(r.Key, out old) && old != null && old.Achievement >= r.Achievement)
+                    if (existing.TryGetValue(r.Key, out old) && old != null)
                     {
-                        res.AlreadyDone.Add(r);
-                        continue;
+                        if (overwrite)
+                        {
+                            // 覆盖模式：分数完全一样才跳过；不同（包括目标更高）一律按源成绩重传。
+                            if (old.Achievement == r.Achievement)
+                            {
+                                res.AlreadyDone.Add(r);
+                                continue;
+                            }
+                        }
+                        else if (skipAlreadyDone && old.Achievement >= r.Achievement)
+                        {
+                            res.AlreadyDone.Add(r);
+                            continue;
+                        }
                     }
                 }
                 var item = new TransferItem { Desired = r.Clone(), Index = idx++ };

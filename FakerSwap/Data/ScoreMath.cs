@@ -58,6 +58,23 @@ namespace FakerSwap.Data
             return RankD;
         }
 
+        /// <summary>
+        /// 覆盖模式下的游玩次数：源次数 × ConfigData.PlayCountPercent%，向下取整且至少 1。
+        /// 0/负数 = 不改；>=100 = 保持源次数。
+        /// </summary>
+        public static int ScalePlayCount(int playCount)
+        {
+            if (playCount <= 0) playCount = 1;
+            try
+            {
+                int pct = FakerSwap.Core.ModConfig.Data.PlayCountPercent;
+                if (pct <= 0 || pct >= 100) return playCount;
+                int scaled = (int)Math.Floor(playCount * (pct / 100.0));
+                return scaled < 1 ? 1 : scaled;
+            }
+            catch (Exception) { return playCount; }
+        }
+
         public static int ThresholdOf(int rank)
         {
             if (rank < 0) rank = 0;

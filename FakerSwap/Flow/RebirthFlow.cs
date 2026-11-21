@@ -2115,7 +2115,7 @@ namespace FakerSwap.Flow
             // DEV ONLY: normally "the target already has an equal/better score" charts are skipped.
             // For single-account testing the plan would always be empty, so ForceOverwriteExisting
             // (ConfigData, default false) disables that filter.
-            bool skipAlreadyDone = !ModConfig.Data.ForceOverwriteExisting;
+            bool skipAlreadyDone = !(ModConfig.Data.ForceOverwriteExisting || ModConfig.Data.OverwriteScores);
             if (!skipAlreadyDone)
                 Log.Warn("flow: force overwrite existing enabled (dev only) - charts already present on the target will be replayed");
 

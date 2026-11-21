@@ -90,6 +90,12 @@ namespace FakerSwap.Core
         /// <summary>这些 musicId 直接跳过不传（临时规避：某些谱面在选歌页选不出来，会拖死任务）。</summary>
         public List<int> SkipMusicIds = new List<int>();
 
+        /// <summary>强制覆盖：目标已有成绩与源不同就按源成绩重写（允许降分）；完全相同则跳过。</summary>
+        public bool OverwriteScores = true;
+
+        /// <summary>游玩次数覆盖为 源次数 × 该百分比（向下取整，至少 1）。0=不改，100=保持源次数。</summary>
+        public int PlayCountPercent = 50;
+
         /// <summary>自动刷卡（写 aime.txt + 回车）。默认 false：只停在登录页，等人工刷卡。</summary>
         public bool AutoSwipe = false;
         /// <summary>Areas the operator wants to crawl (empty = all / whatever the game offers).</summary>
@@ -221,6 +227,10 @@ namespace FakerSwap.Core
                 if (d.UnlockBatchRows > 1000) d.UnlockBatchRows = 1000;
                 d.CrawlCreditLimit = root["CrawlCreditLimit"].AsInt(d.CrawlCreditLimit);
                 if (d.CrawlCreditLimit < 1) d.CrawlCreditLimit = 1;
+                d.OverwriteScores = root["OverwriteScores"].AsBool(d.OverwriteScores);
+                d.PlayCountPercent = root["PlayCountPercent"].AsInt(d.PlayCountPercent);
+                if (d.PlayCountPercent < 0) d.PlayCountPercent = 0;
+                if (d.PlayCountPercent > 100) d.PlayCountPercent = 100;
                 d.SkipMusicIds = new List<int>();
                 var skipArr = root["SkipMusicIds"];
                 if (skipArr.Kind == JsonKind.Array)
@@ -314,6 +324,8 @@ namespace FakerSwap.Core
                 o["FillerScoreEnable"] = JsonValue.Of(d.FillerScoreEnable);
                 o["UnlockBatchRows"] = JsonValue.Of(d.UnlockBatchRows);
                 o["CrawlCreditLimit"] = JsonValue.Of(d.CrawlCreditLimit);
+                o["OverwriteScores"] = JsonValue.Of(d.OverwriteScores);
+                o["PlayCountPercent"] = JsonValue.Of(d.PlayCountPercent);
                 var skipSave = JsonValue.NewArray();
                 if (d.SkipMusicIds != null)
                     foreach (var skipId in d.SkipMusicIds) skipSave.Add(JsonValue.Of(skipId));

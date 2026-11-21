@@ -311,12 +311,19 @@ namespace FakerSwap.Network
         private static void WriteRow(ref UserMusicDetail d, Data.ScoreRecord r)
         {
             // 不降分：目标账号已有更高成绩时保留原值（登录数据未加载完时计划会误把已有曲当 missing）
+            // 覆盖模式（OverwriteScores）下改为强制按源成绩重写，包括降分。
             if (d.achievement > r.Achievement)
             {
-                _downgradeBlocked++;
-                if (_downgradeBlocked <= 8)
-                    Log.Warn("[net] 跳过降分: " + r.MusicId + "-" + r.Level + " 现有 " + d.achievement + " > 目标 " + r.Achievement);
-                return;
+                bool overwrite;
+                try { overwrite = ModConfig.Data.OverwriteScores; }
+                catch (Exception) { overwrite = false; }
+                if (!overwrite)
+                {
+                    _downgradeBlocked++;
+                    if (_downgradeBlocked <= 8)
+                        Log.Warn("[net] 跳过降分: " + r.MusicId + "-" + r.Level + " 现有 " + d.achievement + " > 目标 " + r.Achievement);
+                    return;
+                }
             }
             int achv = r.Achievement;
             if (achv < 0) achv = 0;
@@ -331,6 +338,7 @@ namespace FakerSwap.Network
             if (dx < 0) dx = 0;
             int pc = r.PlayCount;
             if (pc <= 0) pc = 1;
+            pc = Data.ScoreMath.ScalePlayCount(pc);
             int ext = r.ExtNum1;
             if (ext < 0) ext = 0;
 

@@ -477,6 +477,7 @@ namespace FakerSwap.Data
             if (dx < 0) dx = 0;
             int pc = rec.PlayCount;
             if (pc <= 0) pc = 1;
+            pc = ScoreMath.ScalePlayCount(pc);
             int ext = rec.ExtNum1;
             if (ext < 0) ext = 0;
 
