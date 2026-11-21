@@ -839,6 +839,24 @@ namespace FakerSwap.Flow
             return false;
         }
 
+        /// <summary>区域的游戏内完成状态（读当前账号 UserData.MapList，选区页之外也能查）。</summary>
+        private static bool IsAreaComplete(int areaId)
+        {
+            try
+            {
+                var ud = UserDataPatcher.GetLive(0);
+                var maps = ud != null ? ud.MapList : null;
+                if (maps == null) return false;
+                for (int i = 0; i < maps.Count; i++)
+                {
+                    var m = maps[i];
+                    if (m != null && m.ID == areaId) return m.IsComplete;
+                }
+            }
+            catch (Exception) { }
+            return false;
+        }
+
         // ---- area crawl loop ----
         private static readonly HashSet<int> _crawlDone = new HashSet<int>();
         private static int _crawlRound = 1;
@@ -865,14 +883,23 @@ namespace FakerSwap.Flow
                 if (areaId > 0 && areaId != _crawlLastAreaId)
                 {
                     _crawlLastAreaId = areaId;
-                    _crawlDone.Add(areaId);
-                    // 落盘：重启后仍记得这个区本轮跑过（否则每次重启都从头重跑）。
-                    CrawlState.Save(_crawlDone, _crawlRound, ModConfig.Data.CrawlAreaIds);
-                    try { AreaCatalog.MarkStale(); } catch (Exception) { }
-                    Log.Info("[flow] 选区: areaId=" + areaId + " name=" + areaName + " 进度=" +
+                    Log.Info("[flow] 选区: areaId=" + areaId + " name=" + areaName + " 已完成=" +
                              _crawlDone.Count + (planned > 0 ? "/" + planned : "/?") +
                              " 剩余倒计时=" + ModConfig.Data.AreaSelectTimeoutSec.ToString("0.0") + "s" +
                              " 轮次=" + _crawlRound);
+                }
+
+                // 「已完成」才记入 _crawlDone（并落盘）—— 跑过一次但还没填满的区会继续跑，
+                // 跑完的区域（游戏 IsComplete）以后不再选。之前是「选中即算完成」，导致立刻
+                // 换区/或者被当成跑完跳过，都是错的。
+                if (areaId > 0 && !_crawlDone.Contains(areaId) && IsAreaComplete(areaId))
+                {
+                    _crawlDone.Add(areaId);
+                    CrawlState.Save(_crawlDone, _crawlRound, ModConfig.Data.CrawlAreaIds);
+                    try { AreaCatalog.MarkStale(); } catch (Exception) { }
+                    Log.Info("[crawl] 区域完成: areaId=" + areaId + " name=" + areaName +
+                             " → 已完成 " + _crawlDone.Count + (planned > 0 ? "/" + planned : "") +
+                             "（后续不会再选它）");
                 }
 
                 if (ModConfig.Data.CrawlAllAreasFallback && planned > 0 && Plan != null

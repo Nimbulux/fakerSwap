@@ -480,7 +480,7 @@ namespace FakerSwap.UI.NativeWindow
             c.Text("区域（爬图）", x + c.S(8), y, c.S(110), headerH, Theme.Accent, false, true);
 
             string summary = "已选 " + _areaSel.Count + " / " + (s.Areas != null ? s.Areas.Length : 0) +
-                             "   ·   本轮已跑 " + s.CrawlDoneCount +
+                             "   ·   已完成 " + s.CrawlDoneCount +
                              "   ·   完成 " + s.CrawlCompletedCount;
             c.TextSmall(summary, x + c.S(116), y + c.S(7), width - c.S(300), c.S(18), Theme.Muted);
 
