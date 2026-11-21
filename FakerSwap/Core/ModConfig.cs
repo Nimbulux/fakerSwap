@@ -100,6 +100,11 @@ namespace FakerSwap.Core
         /// 97.9191% → 98.0809%（整数位+1，1-小数作为新小数）。</summary>
         public bool AchievementMirrorUp = true;
 
+        /// <summary>覆盖模式下 DX 分数在源值上加 [DxBonusMin, DxBonusMax]（0/0=不加），
+        /// 并夹到谱面理论最大值（note 数 × 3）以内，保证是打得出来的。</summary>
+        public int DxBonusMin = 5;
+        public int DxBonusMax = 10;
+
         /// <summary>自动刷卡（写 aime.txt + 回车）。默认 false：只停在登录页，等人工刷卡。</summary>
         public bool AutoSwipe = false;
         /// <summary>Areas the operator wants to crawl (empty = all / whatever the game offers).</summary>
@@ -236,6 +241,11 @@ namespace FakerSwap.Core
                 if (d.PlayCountPercent < 0) d.PlayCountPercent = 0;
                 if (d.PlayCountPercent > 100) d.PlayCountPercent = 100;
                 d.AchievementMirrorUp = root["AchievementMirrorUp"].AsBool(d.AchievementMirrorUp);
+                d.DxBonusMin = root["DxBonusMin"].AsInt(d.DxBonusMin);
+                d.DxBonusMax = root["DxBonusMax"].AsInt(d.DxBonusMax);
+                if (d.DxBonusMin < 0) d.DxBonusMin = 0;
+                if (d.DxBonusMax < 0) d.DxBonusMax = 0;
+                if (d.DxBonusMax < d.DxBonusMin) d.DxBonusMax = d.DxBonusMin;
                 d.SkipMusicIds = new List<int>();
                 var skipArr = root["SkipMusicIds"];
                 if (skipArr.Kind == JsonKind.Array)
@@ -332,6 +342,8 @@ namespace FakerSwap.Core
                 o["OverwriteScores"] = JsonValue.Of(d.OverwriteScores);
                 o["PlayCountPercent"] = JsonValue.Of(d.PlayCountPercent);
                 o["AchievementMirrorUp"] = JsonValue.Of(d.AchievementMirrorUp);
+                o["DxBonusMin"] = JsonValue.Of(d.DxBonusMin);
+                o["DxBonusMax"] = JsonValue.Of(d.DxBonusMax);
                 var skipSave = JsonValue.NewArray();
                 if (d.SkipMusicIds != null)
                     foreach (var skipId in d.SkipMusicIds) skipSave.Add(JsonValue.Of(skipId));

@@ -157,6 +157,16 @@ namespace FakerSwap.Data
                              (desiredAchv / 10000.0).ToString("0.0000") + "%");
                     item.Desired.Achievement = desiredAchv;
                 }
+                if (overwrite && ModConfig.Data.DxBonusMax > 0)
+                {
+                    int before = item.Desired.DeluxscoreMax;
+                    int bumped = BumpDx(r.MusicId, r.Level, before);
+                    if (bumped != before)
+                    {
+                        Log.Info("[plan] DX 加分: " + r.MusicId + "-" + r.Level + "  " + before + " → " + bumped);
+                        item.Desired.DeluxscoreMax = bumped;
+                    }
+                }
                 if (GenerateJudgeBreakdown) AttachJudge(item.Desired);
                 res.Items.Add(item);
             }
@@ -183,6 +193,35 @@ namespace FakerSwap.Data
             if (mirrored > 1010000) return achv;
             return mirrored;
         }
+
+        /// <summary>
+        /// 覆盖模式的 DX 加分：源 DX + rand(DxBonusMin..DxBonusMax)，夹到谱面理论最大值
+        /// (maxNotes × 3) 以内，保证成绩是「打得出来」的。
+        /// </summary>
+        private static int BumpDx(int musicId, int level, int dx)
+        {
+            try
+            {
+                int lo = ModConfig.Data.DxBonusMin;
+                int hi = ModConfig.Data.DxBonusMax;
+                if (hi <= 0) return dx;
+                if (lo < 0) lo = 0;
+                if (hi < lo) hi = lo;
+                int bonus = lo + _dxRng.Next(hi - lo + 1);
+                int result = dx + bonus;
+                int maxNotes = ChartCatalog.GetMaxNotes(musicId, level);
+                if (maxNotes > 0)
+                {
+                    int theory = maxNotes * 3;
+                    if (result > theory) result = theory;
+                }
+                if (result < 0) result = 0;
+                return result;
+            }
+            catch (Exception) { return dx; }
+        }
+
+        private static readonly Random _dxRng = new Random(Environment.TickCount);
 
         /// <summary>True when the operator blacklisted this song in config (SkipMusicIds).</summary>
         private static bool IsMusicSkipped(int musicId)
