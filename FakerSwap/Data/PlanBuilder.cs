@@ -18,6 +18,8 @@ namespace FakerSwap.Data
         public List<ScoreRecord> AlreadyDone = new List<ScoreRecord>();
         /// <summary>源成绩低于 MinAchievement → 被抬到 80%+ 的记录数。</summary>
         public int RaisedLow;
+        /// <summary>低分抬升的记录里，目标账号本来就已经超过下限 → 跳过不覆盖的数量。</summary>
+        public int KeptAboveMin;
         public int SourceTotal;
         /// <summary>How many of the source records existed in the target account (diagnostics).</summary>
         public int ExistingTotal;
@@ -29,7 +31,8 @@ namespace FakerSwap.Data
         {
             return "items=" + Items.Count + " source=" + SourceTotal + " missing=" + Missing.Count +
                    " locked=" + Locked.Count + " outOfRange=" + OutOfRange.Count +
-                   " alreadyDone=" + AlreadyDone.Count + " raised=" + RaisedLow;
+                   " alreadyDone=" + AlreadyDone.Count + " raised=" + RaisedLow +
+                   " keptAboveMin=" + KeptAboveMin;
         }
     }
 
@@ -147,6 +150,14 @@ namespace FakerSwap.Data
                     ScoreRecord old;
                     if (existing.TryGetValue(r.Key, out old) && old != null)
                     {
+                        // 低分抬升的记录只升不降：目标账号已经超过 80%（或者已经高于抬升值）就跳过，
+                        // 绝不用抬升值去覆盖一个本来更高的成绩。
+                        if (raisedLow && old.Achievement > ModConfig.Data.MinAchievement)
+                        {
+                            res.AlreadyDone.Add(r);
+                            res.KeptAboveMin++;
+                            continue;
+                        }
                         if (overwrite)
                         {
                             // 覆盖模式：源成绩（含镜像后的值）与目标完全一样才跳过；不同一律重传。
