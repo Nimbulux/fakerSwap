@@ -734,7 +734,8 @@ namespace FakerSwap.Flow
         }
 
         /// <summary>下一个要跑的 areaId：按勾选列表顺序；跳过本轮已跑、已完成、锁定、无限区。
-        /// 全部跑完且 CrawlAllAreasFallback=true 时清空本轮记录、开新一轮。</summary>
+        /// 只有「勾选列表里的每一个区在游戏里都已 complete」才会开新一轮；
+        /// 若勾选的区大多不可用（不属于本版本/未开放），改用运行时列表里的未完成区，避免死循环。</summary>
         private static int PickCrawlAreaId()
         {
             try
@@ -742,23 +743,33 @@ namespace FakerSwap.Flow
                 var areas = MapHooks.AvailableAreas;
                 if (areas == null || areas.Count == 0) return -1;
                 var wanted = ModConfig.Data.CrawlAreaIds;
-                int picked = PickFromWanted(wanted, areas);
-                if (picked > 0) return picked;
-
-                // 勾选的区都跑过了：按配置决定「下一轮」还是「找运行时列表里剩下的未完成区」。
                 if (wanted != null && wanted.Count > 0)
                 {
-                    if (ModConfig.Data.CrawlAllAreasFallback && HasIncompleteArea(areas))
+                    bool allComplete;
+                    string detail;
+                    int picked = ScanWanted(wanted, areas, out allComplete, out detail);
+                    if (picked > 0) { LogCrawlSkip("选中 " + picked + "；" + detail); return picked; }
+
+                    LogCrawlSkip("勾选区没有可跑项；" + detail);
+                    if (allComplete && ModConfig.Data.CrawlAllAreasFallback)
                     {
                         _crawlRound++;
                         _crawlDone.Clear();
                         CrawlState.Save(_crawlDone, _crawlRound, wanted);
-                        Log.Info("[crawl] 勾选区已跑完一轮 → 开始第 " + _crawlRound + " 轮（清空本轮记录）");
-                        picked = PickFromWanted(wanted, areas);
+                        Log.Info("[crawl] 勾选的 " + wanted.Count + " 个区全部已完成 → 开始第 " + _crawlRound + " 轮");
+                        picked = ScanWanted(wanted, areas, out allComplete, out detail);
                         if (picked > 0) return picked;
                     }
-                    // 勾选的区全完成/全锁：不再乱跑别的区，交由上层结束
-                    Log.Info("[crawl] 勾选的区域已全部跑完或不可跑（轮次=" + _crawlRound + "）");
+                    // 勾选列表不可用（旧版本区/未开放）：临时用运行时列表里第一个未完成的区，
+                    // 不要清空已跑记录（否则会永远在同一个默认区上打转）。
+                    for (int i = 0; i < areas.Count; i++)
+                    {
+                        var a = areas[i];
+                        if (a == null || a.IsLock || a.IsInfinity || a.IsComplete || _crawlDone.Contains(a.Id)) continue;
+                        Log.Warn("[crawl] 勾选区域不可用 → 临时改跑运行时未完成区 " + a.Id + "（" + a.Name + "）");
+                        return a.Id;
+                    }
+                    Log.Warn("[crawl] 勾选区域不可用，且运行时列表里也没有未完成区 → 本轮不再换区");
                     return -1;
                 }
 
@@ -773,44 +784,48 @@ namespace FakerSwap.Flow
             catch (Exception) { return -1; }
         }
 
-        private static int PickFromWanted(List<int> wanted, List<Navigation.AreaInfo> areas)
+        /// <summary>按勾选顺序找第一个能跑的区；同时给出完整跳过原因（不再被日志节流吞掉）。</summary>
+        private static int ScanWanted(List<int> wanted, List<Navigation.AreaInfo> areas,
+            out bool allComplete, out string detail)
         {
-            if (wanted == null || wanted.Count == 0) return -1;
-            var skipped = new System.Text.StringBuilder();
+            allComplete = wanted != null && wanted.Count > 0;
+            var sb = new System.Text.StringBuilder();
+            int pick = -1;
+            if (wanted == null) { detail = ""; return -1; }
             for (int w = 0; w < wanted.Count; w++)
             {
                 int id = wanted[w];
-                if (_crawlDone.Contains(id)) { skipped.Append(id).Append(":已跑 "); continue; }
+                if (_crawlDone.Contains(id)) { sb.Append(id).Append(":已跑 "); allComplete = false; continue; }
                 bool found = false;
                 for (int i = 0; i < areas.Count; i++)
                 {
                     var a = areas[i];
                     if (a == null || a.Id != id) continue;
                     found = true;
-                    if (a.IsLock) { skipped.Append(id).Append(":锁定 "); break; }
-                    if (a.IsInfinity) { skipped.Append(id).Append(":无限 "); break; }
-                    if (a.IsComplete) { skipped.Append(id).Append(":已完成 "); break; }
-                    if (skipped.Length > 0)
-                    {
-                        LogCrawlSkip(skipped.ToString());
-                    }
-                    return a.Id;
+                    if (a.IsLock) { sb.Append(id).Append(":锁定 "); allComplete = false; }
+                    else if (a.IsInfinity) { sb.Append(id).Append(":无限 "); allComplete = false; }
+                    else if (a.IsComplete) sb.Append(id).Append(":已完成 ");
+                    else if (pick < 0) pick = a.Id;
+                    break;
                 }
-                if (!found) skipped.Append(id).Append(":列表里没有 ");
+                if (!found) { sb.Append(id).Append(":列表里没有 "); allComplete = false; }
             }
-            if (skipped.Length > 0) LogCrawlSkip(skipped.ToString());
-            return -1;
+            detail = sb.ToString();
+            return pick;
         }
 
-        private static double _crawlSkipLogAt = -1000;
+        private static string _lastCrawlSkipDetail = "";
+        private static double _lastCrawlSkipAt = -1000;
 
-        /// <summary>选区跳过原因（节流：同一屏只打一条，便于排查「为什么不按列表跑」）。</summary>
+        /// <summary>选区检查：同样的内容 30s 内只打一次，但不再丢弃不同内容（避免排查时看不到原因）。</summary>
         private static void LogCrawlSkip(string text)
         {
+            if (string.IsNullOrEmpty(text)) return;
             double now = UnityEngine.Time.realtimeSinceStartup;
-            if (now - _crawlSkipLogAt < 2.5) return;
-            _crawlSkipLogAt = now;
-            Log.Info("[crawl] 选区跳过（按勾选顺序检查）: " + text);
+            if (text == _lastCrawlSkipDetail && now - _lastCrawlSkipAt < 30.0) return;
+            _lastCrawlSkipDetail = text;
+            _lastCrawlSkipAt = now;
+            Log.Info("[crawl] 选区检查: " + text);
         }
 
         private static bool HasIncompleteArea(List<Navigation.AreaInfo> areas)
