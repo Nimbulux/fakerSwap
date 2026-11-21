@@ -2764,6 +2764,9 @@ namespace FakerSwap.Flow
         private static double _holdUntil = -1000;
         private static bool _holdUserTookOver;
         private static double _holdTookOverUntil = -1000;
+        /// <summary>进入该屏时是否已经有输入（触摸板残留/鼠标映射的幻影触摸）——有则整屏忽略接管判断。</summary>
+        private static bool _holdInputAtEntry;
+        private static double _holdPhantomLogAt = -100;
 
         /// <summary>当前是否处在「让用户操作」窗口（机台锁应临时释放）。</summary>
         public static bool UserHoldActive
@@ -2831,27 +2834,32 @@ namespace FakerSwap.Flow
                 _holdKey = key;
                 _holdUntil = now + (seconds > 0 ? seconds : 3.0);
                 _holdUserTookOver = false;
-                Log.Info("[hold] 界面 " + key + "：先停 " + (seconds > 0 ? seconds : 3.0).ToString("0.0") + "s 给用户操作（机台锁临时释放）");
+                string entrySource;
+                _holdInputAtEntry = UserInputSeen(out entrySource);
+                Log.Info("[hold] 界面 " + key + "：先停 " + (seconds > 0 ? seconds : 3.0).ToString("0.0") +
+                         "s 给用户操作（机台锁临时释放）" +
+                         (_holdInputAtEntry
+                             ? "；进入时已有输入(" + entrySource + ") → 视为残留，本屏不做接管判断"
+                             : ""));
+                if (_holdInputAtEntry) _holdSuppressedKey = key;
             }
-            // 本屏已经因为误判接管过一次 → 恢复后不再交给用户，避免被持续误判卡死到选曲超时。
-            bool suppressed = _holdSuppressedKey == _holdKey;
-            string source;
-            if (!suppressed && UserInputSeen(out source))
-            {
-                if (!_holdUserTookOver)
-                {
-                    _holdUserTookOver = true;
-                    _holdTookOverUntil = now + 6.0;   // 接管最多 6s，超时恢复自动化
-                    Log.Info("[hold] 界面 " + key + "：检测到用户操作(" + source + ") → 本屏交给用户，自动化暂停");
-                }
-                return true;
-            }
+            // 1) 接管到期判断放最前面：哪怕输入状态一直是脏的（IsTouchPanelPush 卡住），6s 后也必定恢复。
             if (_holdUserTookOver)
             {
                 if (now < _holdTookOverUntil) return true;
                 _holdUserTookOver = false;
                 _holdSuppressedKey = _holdKey;
                 Log.Info("[hold] 界面 " + key + "：接管时间到 → 恢复自动化（本屏不再交给用户）");
+            }
+            // 2) 进屏时就有残留输入（触摸板一直 push / 鼠标映射）→ 整屏忽略，只等固定秒数。
+            bool suppressed = _holdSuppressedKey == _holdKey;
+            string source;
+            if (!suppressed && UserInputSeen(out source))
+            {
+                _holdUserTookOver = true;
+                _holdTookOverUntil = now + 6.0;
+                Log.Info("[hold] 界面 " + key + "：检测到用户操作(" + source + ") → 本屏交给用户，自动化暂停（最多 6s）");
+                return true;
             }
             if (now < _holdUntil) return true;
             _holdUntil = -1000;
